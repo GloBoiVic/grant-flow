@@ -11,48 +11,50 @@ Last updated: 2026-08-10
 - `AGENTS.md` corrected with accurate source-of-truth paths and selective-loading policy
 - `.agents/skills/` verified present with 6 skill guides
 
-### Roadmap + feature specs (this session — 2026-08-09)
+### Roadmap + feature specs (prior session — 2026-08-09)
 - `context/roadmap.md` — complete implementation roadmap at the authoritative product-level; 551 lines covering current state, product boundary, 5 phases, dependency model, pre-build decisions, unresolved decisions, and feature index
-- **23 feature specification files** across `context/features/` (five directories, one per phase), each with 15 numbered headings plus metadata: summary, problem, target users, requirements, workflows, acceptance criteria, edge cases, data model, permission model, UI specification, error states, performance expectations, dependencies, notes, open questions
+- **23 feature specification files** across `context/features/` (five directories, one per phase), each with 15 numbered headings plus metadata
 - **Phase 0 — Platform Foundation** (3 specs): GF-AUTH-001, GF-SHELL-001, GF-DATA-001
 - **Phase 1 — Core Grant Tracker** (6 specs): GF-FUNDER-001, GF-GRANT-001, GF-GRANT-002, GF-GRANT-003, GF-ACTIVITY-001, GF-TAG-001
 - **Phase 2 — Spreadsheet Replacement MVP** (5 specs): GF-IMPORT-001, GF-DOCUMENT-001, GF-DEADLINE-001, GF-DASH-001, GF-FUNDER-002
 - **Phase 3 — Post-MVP Insights** (5 specs): GF-REPORT-001, GF-EXPORT-001, GF-NOTIFY-001, GF-COLLAB-001, GF-DATA-002
 - **Phase 4 — Future Consideration** (4 specs): GF-INTEGRATE-001, GF-INTEGRATE-002, GF-BILL-001, GF-ANALYTICS-001
 
-### Decision log expanded
-- **D-006** — Grant Semantics: one Grant = one opportunity/application cycle (no Opportunity entity)
-- **D-007** — Local Role Model: exactly ADMIN, MEMBER, VIEWER (Prisma enum, mapped from Clerk)
-- **D-008** — Identity Reconciliation: Clerk as authority, local tables as idempotent projection via webhooks
-- **D-009** — Testing Stack: Vitest + RTL for unit/integration, Playwright for E2E (decided, not installed)
-- **D-010** — Tag Semantics: flat, org-scoped, user-created, many-to-many via GrantTag join table
+### Decision log expanded (prior session)
+- **D-006** — Grant Semantics: one Grant = one opportunity/application cycle
+- **D-007** — Local Role Model: exactly ADMIN, MEMBER, VIEWER
+- **D-008** — Identity Reconciliation: Clerk as authority, local tables as idempotent projection
+- **D-009** — Testing Stack: Vitest + RTL for unit/integration, Playwright for E2E
+- **D-010** — Tag Semantics: flat, org-scoped, user-created, many-to-many via GrantTag
 
-### Corrections applied to roadmap
-- Grant semantics resolved (one Grant per cycle, not multi-cycle entity)
-- Phase-wide hard dependencies replaced with feature-level dependency maps
-- GF-FUNDER-002 renamed from "Funder-Facing Portfolio View" to "Funder Portfolio and History" (internal-only)
-- All 16 decisions categorized into three timing groups (pre-foundation, pre-feature, production-hardening)
-- Pre-Build Decisions section added with domain contract, foundation blockers, MVP feature gates, documentation gates
-- All 26 stale roadmap links (`../../../` → `../../`; `#13-` → `#14-`) corrected
-- 6 contradictions reconciled (tag import scope, member deletion, deadline/no-deadline, calendar sync, data lifecycle vs activity, analytics raw SQL exception)
-- MVP scope confirmed and revalidated
-
-### No application code, dependencies, or configuration files were modified
+### GF-DATA-001 — Core Persistence Foundation (this session — 2026-08-10)
+- **Prisma 7.9.1 persistence foundation** with exact pinned dependencies (`prisma`, `@prisma/client`, `@prisma/adapter-pg` all at `7.9.1`), `prisma.config.ts` with `defineConfig`, `prisma/schema.prisma` (11 models: Organization, User, Membership, Funder, FunderContact, Grant, Document, Activity, Tag, GrantTag, ImportStaging; 3 enums: GrantStatus, MembershipRole, FunderType), `src/lib/prisma.ts` server-only singleton with `PrismaPg` adapter, `.env.example` with placeholder only
+- **Initial migration** (`20260810055726_init`) — 306 lines DDL covering all 11 tables, 3 enums, UUID PKs, native PostgreSQL types (`uuid`, `decimal(12,2)`, `date`, `timestamptz`, `jsonb`), 7 unique constraints, 19 indexes, 20 FKs all with `ON DELETE RESTRICT ON UPDATE NO ACTION`
+- **Generated client** at `src/generated/prisma/` (importable as `@/generated/prisma/client`)
+- **`server-only` package** installed at `0.0.1` to fix C1 (import guard in prisma singleton)
+- **Tier 3 security-critical review** completed: 0 critical issues after C1 fix; 2 important process gates remain (I1: ensure all files committed — resolved at `0402ada`; I2: document FunderContact/Acitivity/Document cross-entity org integrity gap in DECISIONS.md — resolved in D-013); 3 minor findings (benign); 2 informational
+- **Atomic commit** at `0402ada` — schema, migration, config, singleton, `.env.example`
+- **Human follow-up commit** `1835fb0` — added `.prisma/` to `.gitignore`
+- **Prisma Compute deployed** — project `proj_cmsmocbqt146x1adx4q0g77lq`, app `grant-flow`, region `us-east-1`, branch `main`, primary database, production environment. Live URL not redacted but connection string kept in local `.env` (gitignored)
+- **No credentials or DATABASE_URL persisted** in any tracked file
 
 ## Decisions made
 
 ### Foundation decisions — locked (see `dispatch/DECISIONS.md`)
 - **Grant per application cycle (D-006):** One Grant record = one specific opportunity or cycle. Repeated annual applications are distinct Grant records per funder. No Opportunity/ApplicationCycle entity.
-- **Exactly ADMIN/MEMBER/VIEWER (D-007):** Prisma enum on Membership table. Clerk `org:admin` → ADMIN, `org:member` → MEMBER, unassigned → VIEWER. Permission matrix in D-007.
-- **Clerk authority, local projection (D-008):** Clerk is the identity provider. Local User/Organization/Membership tables are idempotent projections synced via Svix-verified webhook. 7 rules covering verification, upsert, out-of-order events, first-user flow, duplicate delivery.
-- **Vitest + RTL + Playwright (D-009):** Testing stack decided but not installed. No test infrastructure exists. Decision locked.
-- **Flat org-scoped user-created tags (D-010):** Free-form, unique per org, many-to-many via GrantTag. Colors deferred. Soft-deleted.
+- **Exactly ADMIN/MEMBER/VIEWER (D-007):** Prisma enum on Membership table. Clerk `org:admin` → ADMIN, `org:member` → MEMBER, unassigned → VIEWER.
+- **Clerk authority, local projection (D-008):** Clerk is identity provider. Local User/Organization/Membership tables are idempotent projections synced via Svix-verified webhook.
+- **Vitest + RTL + Playwright (D-009):** Testing stack decided but not installed.
+- **Flat org-scoped user-created tags (D-010):** Free-form, unique per org, many-to-many via GrantTag. Soft-deleted.
+- **Prisma Compute as PostgreSQL provider (D-011):** Project `proj_cmsmocbqt146x1adx4q0g77lq` provisioned. Supabase Storage remains a separate later decision.
+- **Local Prisma tooling — npm-managed, pinned (D-012):** All Prisma packages pinned to exact `7.9.1`. No global install. Platform/repo CLI boundary documented.
+- **FunderContact.organizationId denormalization — application-enforced (D-013):** Denormalized `organizationId` on FunderContact, Activity, and Document. Equality with parent entity's org is enforced at every validated mutation boundary (Zod + application logic), not by database-level constraints.
 
 ### Earlier decisions — still active (see `dispatch/DECISIONS.md`)
-- **Server-owned query modules (D-004):** UI never imports Prisma. `src/lib/queries/` for reads, co-located actions for mutations. Documented in `context/architecture.md` and `context/coding-standards.md`.
-- **Organization isolation:** Every query filtered by `organizationId` from `auth().orgId`. No client-supplied org identity trusted. (See `context/architecture.md`)
-- **No raw SQL by default:** All database access through Prisma ORM. Analytics materialized views are an accepted exception. (See `context/coding-standards.md`)
-- **Design authority:** `src/app/globals.css` (tokens) + `screenshots/` (visual mockups). (See `context/design.md`)
+- **Server-owned query modules (D-004):** UI never imports Prisma. `src/lib/queries/` for reads, co-located actions for mutations.
+- **Organization isolation:** Every query filtered by `organizationId` from `auth().orgId`. No client-supplied org identity trusted.
+- **No raw SQL by default:** All database access through Prisma ORM. Analytics materialized views are an accepted exception.
+- **Design authority:** `src/app/globals.css` (tokens) + `screenshots/` (visual mockups).
 - **Document Responsibility Boundaries (D-001):** Each context doc owns one domain; no duplication.
 - **Default Load Policy (D-002):** AGENTS.md + project-brief.md only at session start.
 - **Repository Reality Overrides Stale Docs (D-005):** Code is ground truth.
@@ -73,77 +75,91 @@ Last updated: 2026-08-10
 ## Problems solved
 
 ### This session
-- Grant semantics ambiguity resolved: one Grant = one opportunity/cycle, not a multi-year entity. All 23 feature specs and roadmap aligned.
-- Phase dependency model corrected: no more "Phase N requires all Phase N-1". Feature-level dependency maps with explicit contracts.
-- Contradictions found and fixed: tag import scope (excluded from MVP import), member deletion behavior, deadline/no-deadline treatment, calendar sync direction, data lifecycle vs append-only history, analytics raw SQL exception.
-- Stale roadmap links (26 occurrences) corrected from wrong relative paths and stale anchor IDs.
-- Stale "Funder-Facing Portfolio View" naming corrected to "Funder Portfolio and History" with explicit internal-only scope.
-- Pre-build decisions section created: foundation blockers, MVP feature gates, documentation gates ensure no premature implementation.
+- **PostgreSQL provider chosen and provisioned:** Prisma Compute selected (D-011), deployed, and verified live.
+- **Prisma 7 adapter pattern resolved:** `PrismaPg` adapter from `@prisma/adapter-pg` works with `pg` driver v8.16.3. `prisma.config.ts` uses `defineConfig` with `env("DATABASE_URL")`. Client generated to `src/generated/prisma/`.
+- **`server-only` dependency added:** Critical blocker C1 resolved — `import "server-only"` guard in `src/lib/prisma.ts` now has a real dependency backing it.
+- **Schema aligned with `context/database.md`:** All 11 models, 3 enums, 7 unique constraints, 19 indexes — verified in review.
+- **Cross-entity org integrity gap documented:** D-013 captures the accepted trade-off for denormalized `organizationId` on FunderContact/Activity/Document with mandatory application-level Zod enforcement.
+- **Tenant isolation verified:** All 11 tenant-owned tables carry `organizationId` FK with `ON DELETE RESTRICT`. GrantTag inherits through FK parents.
 
 ### Prior sessions (still relevant)
+- Grant semantics ambiguity resolved: one Grant = one opportunity/cycle.
+- Phase dependency model corrected: feature-level dependency maps with explicit contracts.
+- Contradictions found and fixed: tag import scope, member deletion behavior, deadline/no-deadline treatment, calendar sync direction, data lifecycle vs append-only history, analytics raw SQL exception.
+- Stale roadmap links (26 occurrences) corrected.
 - Clerk ID separation: local UUIDs distinct from Clerk provider IDs.
-- Server Component Prisma access boundary: UI never imports Prisma; `src/lib/queries/` module pattern from D-004.
-- Zod installed but not integrated — no validation boundaries exist yet.
-- Context docs deduplicated: cross-references replaced inline copies of token tables, dependency tables, and implementation-status inventories.
+- Server Component Prisma access boundary: UI never imports Prisma.
+- Zod installed but not integrated.
+- Context docs deduplicated.
 
 ## Eureka moments
 
-(No new eureka moments this session. Prior session insights about Clerk ID separation, server-owned query modules, and document responsibility boundaries remain relevant.)
+- **Prisma 7's `prisma.config.ts` decoupling:** The `defineConfig` pattern separates datasource URL config from schema, enabling different configs for dev vs compute without editing the schema. The generator must be `prisma-client` (not `prisma-client-js`).
+- **Denormalized `organizationId` as accepted trade-off:** For FunderContact, Activity, and Document, denormalization enables efficient org-scoped queries without joins. Application-level Zod enforcement (not DB triggers) is the compensating control — keeps schema portable and avoids raw SQL.
 
 ## Current state
 
-**Documentation complete — all planning artifacts in place:**
-- `context/roadmap.md` — implementation roadmap with 5 phases, dependency model, pre-build gates, unresolved decisions
-- `context/features/` — 23 feature specs across 5 phase directories
-- `dispatch/DECISIONS.md` — 10 active decisions (D-001 through D-010), plus open-decision links
-- All `context/` docs consolidated, deduplicated, cross-referenced, single-owner boundaries enforced
+**Persistence foundation complete. Application implementation beginning:**
+- `prisma/schema.prisma` — 11 models, 3 enums, fully indexed, with initial migration applied
+- `prisma.config.ts` — Prisma 7 config with `defineConfig`
+- `src/lib/prisma.ts` — server-only singleton with `PrismaPg` adapter, importable as `@/lib/prisma`
+- `.env.example` — template for required env vars (placeholders only)
+- `prisma/migrations/20260810055726_init/` — initial migration (306 lines DDL)
+- `src/generated/prisma/` — generated client
+- Prisma Compute deployed and live (project `proj_cmsmocbqt146x1adx4q0g77lq`)
 
-**Application implementation: not started.**
-- Next.js 16.3.0 scaffold with React 19.2.8, TypeScript, Tailwind CSS v4 — same as initial scaffold
+**Remaining scaffold:**
+- Next.js 16.3.0 with React 19.2.8, TypeScript, Tailwind CSS v4 — unchanged from initial scaffold
 - Design token system in `globals.css` — light-only, Linear-inspired
 - Root layout with Inter font, `h-full` structure
 - Default create-next-app `page.tsx` — no GrantFlow screens
-- **Zod 4.4.3 installed** as direct dependency — not integrated anywhere
-- **No Prisma** — no schema, migrations, or client
-- **No Clerk** — not installed or configured
-- **No Supabase Storage** — not configured
-- **No Server Actions or Route Handlers**
-- **No test infrastructure** (Vitest/RTL/Playwright decided but not installed)
-- **No shadcn/ui** — not initialized
-- **No icons, charts, Sonner, responsive code, or environment configuration**
-- **No functional GrantFlow screen** — dashboard, grants, funders, deadlines, login, detail, etc. all absent
+
+**Not yet implemented:**
+- No Clerk — not installed or configured
+- No Supabase Storage — not configured
+- No Server Actions or Route Handlers
+- No query modules (`src/lib/queries/`)
+- No Zod validation schemas wired to API boundaries
+- No test infrastructure (Vitest/RTL/Playwright decided but not installed)
+- No shadcn/ui — not initialized
+- No icons, charts, Sonner, responsive code, or environment configuration beyond `.env.example`
+- No functional GrantFlow screen — dashboard, grants, funders, deadlines, login, detail, etc. all absent
 
 ## Next session starts with
 
-**Documentation-only work is complete. The gate to implementation is open.**
+**Persistence foundation is built. The next implementation target is GF-AUTH-001 (Clerk Authentication & Identity Sync):**
 
-The first implementation target is **GF-DATA-001 (Core Persistence Foundation)**, which requires:
+1. Install and configure Clerk (`@clerk/nextjs`)
+2. Set up middleware for route protection
+3. Create sign-in and sign-up pages matching the login screenshot
+4. Implement webhook handler at `src/app/api/webhooks/clerk/route.ts` for idempotent User/Organization/Membership sync
+5. Create Clerk adapter in `src/lib/clerk/`
+6. Wire `auth().orgId` into query scope pattern
 
-1. **Prisma setup** — `npx prisma init`, schema definition matching `context/database.md`, first migration
-2. **PostgreSQL provision** — local or remote database
-3. **Environment configuration** — `.env` for `DATABASE_URL`
-4. **Prisma Client generation** — `npx prisma generate`
+**Dependencies from GF-DATA-001 that are ready:**
+- Organization, User, Membership tables exist in schema and on Prisma Compute
+- Prisma client singleton is ready for webhook upserts
+- `.env.example` needs `NEXT_PUBLIC_CLERK_*` variables added
 
-Everything needed to begin is documented:
-- Schema: `context/database.md` (entities, fields, relations, indexes, enums)
-- Architecture: `context/architecture.md` (layers, boundaries, data flow)
-- Decisions: `dispatch/DECISIONS.md` (Grant semantics, roles, identity reconciliation, tags, testing)
-- Tech stack: `context/tech-stack.md` (versions, dependency rules)
-- Design: `context/design.md` + `globals.css` + `screenshots/` (visual authority)
+**Context docs to load for GF-AUTH-001:**
+- `context/architecture.md` (identity reconciliation, data flow)
+- `context/database.md` (User/Organization/Membership schema details)
+- `dispatch/DECISIONS.md` (D-007 role model, D-008 identity sync rules)
+- `.agents/skills/clerk-auth/SKILL.md`
 
-Pre-build gates already satisfied: Grant semantics (D-006), role model (D-007), identity reconciliation (D-008), testing stack (D-009), tag semantics (D-010). Decisions deferred to later phases (drawer route, dashboard periods, import semantics, etc.) do not block GF-DATA-001.
+**Pre-build gates already satisfied:** Grant semantics (D-006), role model (D-007), identity reconciliation (D-008), testing stack (D-009), tag semantics (D-010), Prisma Compute provider (D-011), Prisma tooling (D-012), cross-entity org integrity (D-013).
 
 ## Open questions
 
-- PostgreSQL provider choice for development (local install vs Docker vs Prisma Postgres) — resolve before GF-DATA-001
-- Prisma schema location convention (single `schema.prisma` vs multi-file) — resolve before GF-DATA-001
-- shadcn/ui initialization timing — before or after first screen? (No hard dependency — GF-DATA-001 does not need it)
-- All remaining open decisions listed above (drawer route, dashboard periods, import semantics, etc.) — deferred until their corresponding features begin
+- **shadcn/ui initialization timing** — before or after first screen? (GF-AUTH-001 may not need it, but GF-SHELL-001 will)
+- **Sonner toast integration** — needed for mutation feedback, not yet decided
+- **Environment variable convention** — `.env.local` vs `.env` for Clerk keys (`.env*` is gitignored, so either works)
+- All remaining open decisions from DECISIONS.md (drawer route, dashboard periods, import semantics, etc.) — deferred until their corresponding features begin
 
 ## References
 
 - `AGENTS.md` — root operating manual
-- `context/project-brief.md` — product authority (untracked, pre-existing)
+- `context/project-brief.md` — product authority
 - `context/index.md` — context manifest
 - `context/roadmap.md` — implementation roadmap with feature index
 - `context/features/` — 23 feature specification files across 5 phases
@@ -152,8 +168,10 @@ Pre-build gates already satisfied: Grant semantics (D-006), role model (D-007), 
 - `context/design.md` — UI/UX design contract
 - `context/tech-stack.md` — technology stack documentation
 - `context/coding-standards.md` — coding conventions
-- `dispatch/DECISIONS.md` — decision log (D-001 through D-010 + open links)
+- `dispatch/DECISIONS.md` — decision log (D-001 through D-013)
 - `dispatch/COMPLETED.md` — completed work log
 - `src/app/globals.css` — design token authority
 - `screenshots/` — visual mockups for all screens
 - `.agents/skills/` — six authoritative skill guides
+- `prisma/schema.prisma` — database schema (11 models, 3 enums)
+- `src/lib/prisma.ts` — Prisma client singleton
