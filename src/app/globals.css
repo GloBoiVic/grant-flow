@@ -1,26 +1,273 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   GrantFlow — shadcn/ui theme (Tailwind v4, CSS-first)
+   -------------------------------------------------------------------------
+   Light mode only. All values match the mockup screenshots 1:1.
+   Colors are kept in hex for pixel-exact fidelity to the screenshots.
+
+   Usage (Next.js 16 + shadcn @latest):
+     1. Lives at app/globals.css — imported by the root layout.
+     2. Inter is loaded via next/font with variable: "--font-sans".
+     3. Run `npx shadcn@latest init` to add shadcn components on top.
+
+   Depends on: tailwindcss + tw-animate-css (both installed by shadcn init).
+   ───────────────────────────────────────────────────────────────────────── */
+
 @import "tailwindcss";
+/* `tw-animate-css` is imported automatically by `npx shadcn@latest init`
+   once shadcn components are added. It's intentionally omitted until then. */
+
+/*
+   GrantFlow is light-mode only, so there is no .dark block.
+   (If you ever need dark mode, add the .dark { ... } overrides here.)
+*/
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Font fallbacks (overridden at runtime by next/font via --font-sans) */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  /* ── Radius scale ──────────────────────────────────── */
+  --radius: 8px;                      /* bare `rounded`; base for cards */
+  --radius-md: 6px;                   /* buttons, inputs               */
+  --radius-lg: 8px;                   /* cards, panels                 */
+  --radius-xl: 12px;                  /* larger surfaces               */
+
+  /* ── Surfaces ──────────────────────────────────────── */
+  --background: #F4F6F6;              /* app canvas (soft gray)        */
+  --foreground: #1F2937;              /* primary text                  */
+  --card: #FFFFFF;                    /* cards, panels, tables         */
+  --card-foreground: #1F2937;
+  --popover: #FFFFFF;                 /* dropdowns, menus, cmd+k       */
+  --popover-foreground: #1F2937;
+
+  /* ── Brand ─────────────────────────────────────────── */
+  --primary: #4F46E5;                 /* indigo                        */
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #4338CA;           /* hover state (custom)          */
+
+  /* ── Tones ─────────────────────────────────────────── */
+  --secondary: #F3F4F6;               /* "to apply" gray, secondary UI */
+  --secondary-foreground: #6B7280;
+  --muted: #F3F4F6;                   /* subtle backgrounds            */
+  --muted-foreground: #6B7280;        /* labels, descriptions          */
+  --accent: #EEF2FF;                  /* primary-light; selected rows  */
+  --accent-foreground: #4F46E5;
+  --fg-muted: #9CA3AF;                /* placeholders, timestamps      */
+
+  /* ── Lines ─────────────────────────────────────────── */
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #4F46E5;                    /* focus rings                   */
+  --border-strong: #D1D5DB;           /* hover borders (custom)        */
+
+  /* ── Destructive / danger ──────────────────────────── */
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --destructive-soft: #FEF2F2;        /* btn-danger hover bg (custom)  */
+
+  /* ── Status badges (bg / fg) ───────────────────────── */
+  --status-to-apply: #F3F4F6;
+  --status-to-apply-fg: #6B7280;
+  --status-in-progress: #EEF2FF;
+  --status-in-progress-fg: #4F46E5;
+  --status-submitted: #FEF3C7;
+  --status-submitted-fg: #D97706;
+  --status-approved: #D1FAE5;
+  --status-approved-fg: #059669;
+  --status-declined: #FEE2E2;
+  --status-declined-fg: #DC2626;
+
+  /* ── Urgency badges (bg / fg) ──────────────────────── */
+  --urgency-due: #FEE2E2;             /* due < 7 days                  */
+  --urgency-due-fg: #DC2626;
+  --urgency-soon: #FEF3C7;            /* due < 30 days                 */
+  --urgency-soon-fg: #D97706;
+
+  /* ── Semantic helpers ──────────────────────────────── */
+  --success: #059669;                 /* positive trends, awarded      */
+  --warning: #D97706;                 /* submitted, soon               */
+  --error: #DC2626;                   /* negative trends, declined     */
+
+  /* ── Avatar palette (decorative) ───────────────────── */
+  --avatar-1-bg: #FCE7F3; --avatar-1-fg: #BE185D;
+  --avatar-2-bg: #DBEAFE; --avatar-2-fg: #1D4ED8;
+  --avatar-3-bg: #D1FAE5; --avatar-3-fg: #047857;
+  --avatar-4-bg: #FEF3C7; --avatar-4-fg: #B45309;
+  --avatar-5-bg: #E0E7FF; --avatar-5-fg: #4338CA;
+  --avatar-6-bg: #FDE68A; --avatar-6-fg: #92400E;
+
+  /* ── Sidebar (shadcn Sidebar component) ────────────── */
+  --sidebar: #FFFFFF;                 /* white surface, border-right   */
+  --sidebar-foreground: #1F2937;
+  --sidebar-primary: #4F46E5;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #EEF2FF;          /* active / selected item        */
+  --sidebar-accent-foreground: #4F46E5;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #4F46E5;
+
+  /* ── Layout metrics (plain CSS vars) ───────────────── */
+  --layout-sidebar-w: 220px;
+  --layout-sidebar-w-collapsed: 80px; /* note: spec says 60px          */
+  --layout-topnav-h: 52px;
+  --layout-slideover-w: 480px;
+  --layout-table-row-h: 44px;
 }
 
+/* ── Map semantic variables → Tailwind utilities ──────────────────────── */
 @theme inline {
+  /* Fonts (loaded via next/font, fallbacks in :root) */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Surfaces */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Brand + tones */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-fg-muted: var(--fg-muted);
+
+  /* Lines */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-border-strong: var(--border-strong);
+
+  /* Destructive */
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+
+  /* Status badges */
+  --color-status-to-apply: var(--status-to-apply);
+  --color-status-to-apply-fg: var(--status-to-apply-fg);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-fg: var(--status-in-progress-fg);
+  --color-status-submitted: var(--status-submitted);
+  --color-status-submitted-fg: var(--status-submitted-fg);
+  --color-status-approved: var(--status-approved);
+  --color-status-approved-fg: var(--status-approved-fg);
+  --color-status-declined: var(--status-declined);
+  --color-status-declined-fg: var(--status-declined-fg);
+
+  /* Urgency badges */
+  --color-urgency-due: var(--urgency-due);
+  --color-urgency-due-fg: var(--urgency-due-fg);
+  --color-urgency-soon: var(--urgency-soon);
+  --color-urgency-soon-fg: var(--urgency-soon-fg);
+
+  /* Semantic */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+
+  /* Avatars */
+  --color-avatar-1-bg: var(--avatar-1-bg);
+  --color-avatar-1-fg: var(--avatar-1-fg);
+  --color-avatar-2-bg: var(--avatar-2-bg);
+  --color-avatar-2-fg: var(--avatar-2-fg);
+  --color-avatar-3-bg: var(--avatar-3-bg);
+  --color-avatar-3-fg: var(--avatar-3-fg);
+  --color-avatar-4-bg: var(--avatar-4-bg);
+  --color-avatar-4-fg: var(--avatar-4-fg);
+  --color-avatar-5-bg: var(--avatar-5-bg);
+  --color-avatar-5-fg: var(--avatar-5-fg);
+  --color-avatar-6-bg: var(--avatar-6-bg);
+  --color-avatar-6-fg: var(--avatar-6-fg);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Radius */
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ── Literal tokens (no var indirection needed) ───────────────────────── */
+@theme {
+  /* Dense type scale */
+  --text-label: 11px;                       /* uppercase labels/headers */
+  --text-label--line-height: 1.5;
+  --text-label--font-weight: 600;
+  --text-label--letter-spacing: 0.06em;
+
+  --text-caption: 12px;                     /* captions, timestamps     */
+  --text-caption--line-height: 1.5;
+
+  --text-sm: 13px;                          /* sidebar, topnav, cells   */
+  --text-sm--line-height: 1.5;
+
+  --text-base: 14px;                        /* default body (dense)     */
+  --text-base--line-height: 1.5;
+
+  --text-title: 20px;                       /* page/section titles      */
+  --text-title--line-height: 1.3;
+  --text-title--font-weight: 700;
+  --text-title--letter-spacing: -0.01em;
+
+  --text-h2: 18px;
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 600;
+
+  --text-metric: 28px;                      /* metric card values       */
+  --text-metric--line-height: 1.1;
+  --text-metric--font-weight: 700;
+  --text-metric--letter-spacing: -0.02em;
+
+  --text-brand: 15px;                       /* sidebar brand            */
+  --text-brand--line-height: 1.4;
+  --text-brand--font-weight: 600;
+
+  /* Tracking */
+  --tracking-label: 0.06em;
+  --tracking-tight: -0.01em;
+  --tracking-metric: -0.02em;
+
+  /* Shadows (from mockups) */
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-md: 0 1px 3px rgba(17, 24, 39, 0.06), 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-lg: 0 10px 25px rgba(17, 24, 39, 0.10), 0 4px 10px rgba(17, 24, 39, 0.04);
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-slideover: 220ms;
+  --ease-slideover: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
