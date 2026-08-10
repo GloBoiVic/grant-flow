@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GrantStatus {
+  Research
+  Qualified
+  Planning
+  Writing
+  InternalReview
+  Submitted
+  Pending
+  Awarded
+  Declined
+  Reporting
+  Closed
+}
+
+enum MembershipRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum FunderType {
+  FOUNDATION
+  FAMILY_FUND
+  CORPORATION
+  OTHER
+}
+
+model Organization {
+  id             String          @id @default(uuid()) @db.Uuid
+  clerkOrgId     String          @unique
+  name           String
+  slug           String          @unique
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
+  memberships    Membership[]
+  funders        Funder[]
+  funderContacts FunderContact[]
+  grants         Grant[]
+  documents      Document[]
+  activities     Activity[]
+  tags           Tag[]
+  importStaging  ImportStaging[]
+}
+
+model User {
+  id                String       @id @default(uuid()) @db.Uuid
+  clerkUserId       String       @unique
+  email             String       @unique
+  name              String
+  avatarUrl         String?
+  createdAt         DateTime     @default(now()) @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @db.Timestamptz
+  memberships       Membership[]
+  ownedGrants       Grant[]      @relation("GrantOwner")
+  createdGrants     Grant[]      @relation("GrantCreator")
+  uploadedDocuments Document[]   @relation("DocumentUploader")
+  activities        Activity[]   @relation("ActivityActor")
+}
+
+model Membership {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  userId         String         @db.Uuid
+  role           MembershipRole
+  createdAt      DateTime       @default(now()) @db.Timestamptz
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, userId])
+}
+
+model Funder {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  name           String
+  type           FunderType
+  website        String?
+  notes          String?
+  countyServed   String?
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
+  deletedAt      DateTime?       @db.Timestamptz
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  contacts       FunderContact[]
+  grants         Grant[]
+  activities     Activity[]
+
+  @@index([organizationId])
+  @@index([organizationId, deletedAt])
+}
+
+model FunderContact {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  funderId       String       @db.Uuid
+  name           String
+  email          String?
+  phone          String?
+  title          String?
+  notes          String?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  deletedAt      DateTime?    @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  funder         Funder       @relation(fields: [funderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([organizationId, funderId])
+}
+
+model Grant {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  funderId        String       @db.Uuid
+  title           String
+  status          GrantStatus
+  amountRequested Decimal?     @db.Decimal(12, 2)
+  amountAwarded   Decimal?     @db.Decimal(12, 2)
+  currency        String       @default("USD")
+  deadline        DateTime?    @db.Date
+  decisionDate    DateTime?    @db.Date
+  awardTimeframe  String?
+  designation     String?
+  countyServed    String?
+  nextSteps       String?
+  notes           String?
+  ownerId         String?      @db.Uuid
+  createdById     String       @db.Uuid
+  createdAt       DateTime     @default(now()) @db.Timestamptz
+  updatedAt       DateTime     @updatedAt @db.Timestamptz
+  deletedAt       DateTime?    @db.Timestamptz
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  funder          Funder       @relation(fields: [funderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  owner           User?        @relation("GrantOwner", fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdBy       User         @relation("GrantCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  documents       Document[]
+  activities      Activity[]
+  grantTags       GrantTag[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, deadline])
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, funderId])
+  @@index([createdById])
+}
+
+model Document {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  grantId        String       @db.Uuid
+  name           String
+  type           String
+  fileKey        String
+  fileSize       Int
+  mimeType       String
+  uploadedById   String       @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  deletedAt      DateTime?    @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  grant          Grant        @relation(fields: [grantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  uploadedBy     User         @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([organizationId, grantId])
+  @@index([uploadedById])
+}
+
+model Activity {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  grantId        String?      @db.Uuid
+  funderId       String?      @db.Uuid
+  action         String
+  description    String
+  metadata       Json?        @db.JsonB
+  actorId        String?      @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  grant          Grant?       @relation(fields: [grantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  funder         Funder?      @relation(fields: [funderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  actor          User?        @relation("ActivityActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([organizationId, grantId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([funderId])
+  @@index([actorId])
+}
+
+model Tag {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  color          String?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  deletedAt      DateTime?    @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  grantTags      GrantTag[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model GrantTag {
+  grantId String @db.Uuid
+  tagId   String @db.Uuid
+  grant   Grant  @relation(fields: [grantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([grantId, tagId])
+}
+
+model ImportStaging {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  importBatchId    String
+  rowIndex         Int
+  rawData          Json         @db.JsonB
+  mappedData       Json?        @db.JsonB
+  validationErrors Json?        @db.JsonB
+  status           String
+  createdAt        DateTime     @default(now()) @db.Timestamptz
+  importedAt       DateTime?    @db.Timestamptz
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([organizationId, importBatchId])
+}
