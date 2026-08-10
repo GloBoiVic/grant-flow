@@ -1,310 +1,142 @@
-# Grant Flow
+# GrantFlow — Agent Operating Manual
 
-Design a modern SaaS web application called **GrantFlow** — a grant portfolio management platform for nonprofit organizations. The interface should be **professional, minimal, and dense**, inspired by **Linear**. Light mode only.
+## Project Identity
 
-### Design Direction
+GrantFlow is a **grant portfolio management platform** for nonprofit grant professionals who currently rely on disconnected spreadsheets, email inboxes, shared drives, and sticky notes. The MVP goal: **replace the spreadsheet-based grant tracker with a faster, cleaner, more reliable application** — centralized grant tracking, portfolio visibility, document organization, and historical insight.
 
-- **Linear-inspired** — clean, fast, keyboard-first, info-dense
-- **Professional** — appropriate for nonprofit grant professionals who use this all day
-- **Dense** — lots of information on screen without feeling cramped
-- **Light mode only** — no dark mode
+Nonprofit grant professionals (1–10 per org) are the primary daily users. Fund development directors are leadership users. Users must understand portfolio health, attention items, active opportunities, and approaching deadlines within five seconds of opening the app.
 
-### Color Palette
+## Product Boundaries
 
-**Primary:**
+**GrantFlow is a grant portfolio management platform.** It manages grant opportunities, funders, documents, activity history, and reporting insights.
 
-- Primary: Indigo #4F46E5
-- Primary Hover: #4338CA
-- Primary Light: #EEF2FF (selected rows, light backgrounds)
+**GrantFlow is not:** a donor CRM, accounting software, an AI grant writer, or a general nonprofit management platform. It does one thing. Full product scope lives in `context/project-brief.md` — that is the authoritative source for product requirements.
 
-**Background:**
+## Source-of-Truth Files
 
-- Background: Soft Gray #F4F6F6
-- Surface: White #FFFFFF (cards, panels, tables)
-- Border: #E5E7EB
+| File | Status | Authority |
+|---|---|---|
+| `AGENTS.md` | ✅ Exists (this file) | Agent operating manual |
+| `context/project-brief.md` | ✅ Exists | Product authority |
+| `context/architecture.md` | ✅ Exists | System architecture |
+| `context/tech-stack.md` | ✅ Exists | Technology decisions |
+| `context/database.md` | ✅ Exists | Schema / data model |
+| `context/coding-standards.md` | ✅ Exists | Code conventions |
+| `context/design.md` | ✅ Exists | Design system details |
+| `context/index.md` | ✅ Exists | Context manifest |
+| `dispatch/DECISIONS.md` | ✅ Exists | Decision log |
+| `src/app/globals.css` | ✅ Exists | Design tokens / theme |
+
+**Repository reality is the implementation authority.** Always verify file contents before acting. Do not assume files exist based on this table.
+
+### Specialized Document Loading Policy
+
+Every session starts with `AGENTS.md` + `context/project-brief.md`. Load additional specialized docs by task type — refer to `context/index.md` for the map. Do not load all context files at once.
+
+## Agent Operating Principles
 
-**Text:**
+- **Read first.** Understand what exists before changing anything.
+- **Follow the plan.** `dispatch/PLAN.md` is the active instruction set. Do not deviate.
+- **One task at a time.** Complete one task before moving to the next.
+- **Stay in scope.** Do not modify unrelated files, invent requirements, or add technologies.
+- **Report accurately.** Distinguish implemented from planned. Never claim capabilities that are not present.
+- **Preserve user changes.** Do not touch deleted or untracked files unless explicitly instructed.
+- **Design authority is `globals.css` + screenshots.** Match what exists; do not introduce new design tokens without explicit decision.
 
-- Text: Deep Charcoal #1F2937 (headings, primary)
-- Text Secondary: #6B7280 (labels, descriptions)
-- Text Muted: #9CA3AF (placeholders, timestamps)
+## Development Workflow
 
-**Status Colors:**
-| Status | Background | Text |
-|--------|------------|------|
-| To Apply | #F3F4F6 | #6B7280 |
-| In Progress | #EEF2FF | #4F46E5 |
-| Submitted | #FEF3C7 | #D97706 |
-| Approved Award | #D1FAE5 | #059669 |
-| Declined Award | #FEE2E2 | #DC2626 |
-| Declined LOI | #FEE2E2 | #DC2626 |
+1. **Understand** — Load AGENTS.md, project brief, PLAN.md, and relevant specialized docs per `context/index.md`.
+2. **Inspect** — Verify the actual repository state. Do not assume.
+3. **Patterns** — Identify existing conventions in code, naming, and structure.
+4. **Affected systems** — Map what files, components, data, or APIs must change.
+5. **Plan** — Outline the precise implementation steps. Confirm with human or orchestrator.
+6. **Implement** — Write code following existing patterns. One file change at a time.
+7. **Test** — No test infrastructure exists yet. Manually verify logic and rendering.
+8. **Review diff** — Compare changes against the plan and existing conventions.
+9. **Verify regressions** — Check that unrelated functionality still compiles and renders.
+10. **Summarize** — Report what was changed, why, and any remaining caveats.
 
-**Urgency Colors:**
-| Urgency | Background | Text | Badge |
-|---------|------------|------|-------|
-| Due < 7 days | #FEE2E2 | #DC2626 | DUE |
-| Due < 30 days | #FEF3C7 | #D97706 | SOON |
+## Context-File Usage
 
-### Typography
+- `context/project-brief.md` — Product scope, users, MVP goals. Read for feature justification.
+- All other `context/` files are **authoritative specialized documents**. Load them selectively by task type via `context/index.md`. Do not modify them unless explicitly tasked or required by an approved implementation/documentation change.
+- Do not create specialized context files as part of implementation work.
+- Do not load all context files at once — refer to `context/index.md` for the selective loading map.
 
-- Font: Inter
-- Body: 14px / 400
-- Headings: 24px (h1), 18px (h2), 14px (h3)
-- Caption/Labels: 12px
-- Dense type scale — not too much whitespace
+## MVP Discipline
 
-### Layout
+The MVP replaces the spreadsheet-based grant tracker and nothing more. Do not build:
 
-- **Fixed sidebar** on left (220px, collapsible to 60px)
-- **Top navigation** with global search (⌘K), notifications bell, user avatar
-- **Main content area** on right
-- **Density:** Dense — Linear-style, compact, info-rich
+- AI features
+- Advanced reporting beyond basic portfolio views
+- Donor CRM capabilities
+- Accounting integrations
+- Multi-tenant billing or org management beyond basic auth isolation
 
----
+When in doubt, ask: "Does this directly help a grant professional spend less time in spreadsheets?" If not, defer.
 
-## Screens to Design
+## Security & Reliability Expectations
 
-### 1. Dashboard (Health at a Glance)
+These are **design constraints**, not implementation status. None of these systems are built yet.
 
-**Sidebar items:**
+- **Auth** — Clerk for authentication. No custom auth.
+- **Authorization** — Role-based access within an organization. Users see only their org's data.
+- **Organization isolation** — All data scoped by organization ID. Cross-org access prohibited.
+- **Validation** — Zod schemas gate every Server Action and Route Handler. Client validation is UX-only.
+- **Server/client boundaries** — Server Actions or Route Handlers for mutations. No direct DB access from client.
+- **Sensitive data** — No secrets in client code. DB credentials in environment variables only.
+- **File uploads** — Supabase Storage. Restrict types and size. Virus scanning deferred.
+- **Database access** — Prisma ORM. No raw SQL. Migrations via Prisma Migrate.
 
-- WORKSPACE section: Dashboard, Grants (42), Funders (18), Deadlines (7)
-- User menu at bottom: avatar, name, org name
+## Definition of Done
 
-**Main content:**
+- Code compiles without TypeScript or ESLint errors.
+- Implementation matches the PLAN.md task spec exactly.
+- Spec-compliant design (matches `globals.css` tokens and existing screenshots).
+- No regressions in existing functionality.
+- Diff reviewed and confirmed against plan.
+- Changes are scoped — no unintended modifications to unrelated files.
 
-- Page title: "Dashboard"
-- **4 metric cards in a row:**
-  - IN PURSUIT: $3.2M (trend: ^ +12% vs last quarter, green)
-  - AWARDED YTD: $1.4M (trend: ^ +8% vs last quarter, green)
-  - WIN RATE: 31% (trend: v -3 pts vs last quarter, red)
-  - ACTIVE GRANTS: 42 (trend: ^ +5 this month, green)
-- Metric card style: Label in uppercase caption, value large/bold, trend small below
+## Documentation Discipline
 
-- **Recent Grants section:**
-  - Header: "Recent Grants" with badge "42 total" and "View all →" link
-  - Table: Title, Funder, Status (badge), Amount, Due
-  - 5-6 rows with status badges
-  - Dense table style (44px rows)
-
-- **Bottom row (2 columns):**
-  - Left: **Upcoming Deadlines** with badge "7" and "Calendar →" link
-    - List: Date badge (day + month), Grant title, Funder, Status badge, Urgency badge (DUE/SOON)
-    - 5 items
-  - Right: **Recent Activity**
-    - Timeline: User avatar (initials), Description, Timestamp
-    - 5 items (marked as awarded, created grant, uploaded doc, moved status, etc.)
-
----
-
-### 2. Grants List Page
-
-**Sidebar:** Same as dashboard, Grants item highlighted
-
-**Main content:**
-
-- Page title: "Grants" with "+ Add Grant" button (indigo, top right)
-- **Filter chips row:** "Add Filter ▾" button + active filter chips (Status: Submitted ×, Funder: Bader ×)
-- **Data table:**
-  - Columns: Checkbox, Title, Funder, Status (badge), Priority (badge), Amount, Due, Owner (avatar initials)
-  - Row height: 44px (dense)
-  - Header: Uppercase, caption size, sticky
-  - Hover: Light indigo highlight (#EEF2FF)
-  - 6-8 rows of data
-  - Some rows have urgency badges (DUE in red, SOON in amber)
-- **Pagination** at bottom: "Showing 1-20 of 42" with ← Prev Next → buttons
-
----
-
-### 3. Grant Sidebar (Slide-Over Panel — FROM RIGHT)
-
-**Triggered by:** Clicking a grant row
-
-**Panel content (480px wide, slides from RIGHT):**
-
-- **Header:** Grant title "Housing Stability Pilot" + Close (✕) button
-- **Status badge:** ● Draft
-- **Funder chip:** 🏛 Hilton Foundation · Program officer: Ana Reyes
-- **Quick action buttons:** Upload, Edit, Change Status ▾, Delete
-- **Summary cards row (3 cards):**
-  - AMOUNT REQUESTED: $120,000 / over 2 years
-  - DEADLINE: Apr 18, 2026 / draft due
-  - STATUS: ● Draft / draft ready to review
-
-- **Milestones section:**
-  - Vertical timeline with colored dots
-  - Completed (green dot): Grant created · Mar 02, 2026
-  - Completed (green dot): Internal review · Mar 28, 2026
-  - Completed (green dot): Budget finalized · Apr 08, 2026
-  - In progress (blue dot): Final review · Apr 19, 2026
-  - Pending (gray dot): Submitted to funder
-  - Pending (gray dot): Funder decision
-
-- **Documents section:** Documents (3)
-- **Recent Activity section:** Last 3 items
-- **"View Full Details →"** link at bottom
-
-**Background:** Semi-transparent overlay on main content (which stays visible on right)
-
----
-
-### 4. Grant Detail Page (Full Page)
-
-**Header:**
-
-- Back arrow + "Back to Grants"
-- Breadcrumb: Grants / Housing Stability Pilot · DRAFT badge
-
-**Grant title:** Housing Stability Pilot
-**Funder:** 🏛 Hilton Foundation · Program officer: Ana Reyes
-
-**Quick action buttons:** Upload, Edit, Change Status ▾, Delete
-
-**Summary cards row (4 cards):**
-
-- AMOUNT REQUESTED: $120,000 / over 2 years
-- DEADLINE: Apr 18, 2026 / draft due
-- STATUS: ● Draft / draft ready to review
-- OWNER: Mira Hassan / Director of Grants
-
-**4 tabs:** Overview | Documents (3) | Milestones | Activity
-
-**Overview Tab (default):**
-
-- **Funder Relationship section:**
-  - Relationship since: 2019
-  - Prior awards: 3
-  - Lifetime funded: $1.2M
-  - Win rate: 50%
-  - Preferred format: Online portal
-- Notes section
-
-**Documents Tab:**
-
-- Upload button
-- Document list with: Name, Type badge, Size, Date, Download, Delete
-
-**Milestones Tab:**
-
-- Full milestone timeline with all 6 milestones
-- Status dots, titles, descriptions, dates
-
-**Activity Tab:**
-
-- Full activity timeline with user avatars, descriptions, timestamps
-
----
-
-### 5. Global Search (⌘K)
-
-**Location:** Top navigation bar
-
-**State when clicked:**
-
-- Search input with magnifying glass icon
-- Placeholder: "Search grants, funders..."
-- Keyboard shortcut hint: ⌘K
-
-**Dropdown results:**
-
-- "Grants" section with 2-3 results (title, funder, status badge)
-- "Funders" section with 1-2 results (name, type badge)
-- Each result shows right arrow →
-
----
-
-### 6. Filter Chips
-
-**Location:** Above the grants table
-
-**State:**
-
-- "Add Filter ▾" button with dropdown arrow
-- Active chips: "Status: Submitted ×", "Funder: Bader ×"
-- "Clear All" link when filters active
-
----
-
-### 7. Funder List Page
-
-**Similar to Grants List but simpler:**
-
-- Page title: "Funders" with "+ Add Funder" button
-- Data table columns: Name, Type (badge), Contact, Grants count, Total Awarded
-- No filter chips needed (simpler)
-- Click row opens funder detail
-
----
-
-### 8. Deadlines Page
-
-**Sidebar:** Deadlines item highlighted
-
-**Main content:**
-
-- Page title: "Upcoming Deadlines" with badge "[7 total]"
-- List view sorted by date (soonest first)
-- Each item:
-  - Date badge (day + month) on left
-  - Grant title + funder name in middle
-  - Status badge on right
-  - Urgency badge (DUE/SOON) if applicable
-- 7 items showing various statuses and urgency levels
-
----
-
-### 9. Login Page
-
-**Centered card design:**
-
-- GrantFlow logo (indigo)
-- "Sign in to GrantFlow"
-- Email input
-- Password input
-- "Sign In" button (indigo)
-- "Or continue with Microsoft" button (with Microsoft icon, gray/outline)
-- "Don't have an account? Sign up" link
-
----
-
-### 10. Empty State (No grants yet)
-
-**Centered layout:**
-
-- Folder icon (muted, 40px)
-- "No grants yet"
-- "Create your first grant to get started."
-- "Create Grant" button (indigo)
-
----
-
-## Design Style Notes
-
-- **Linear-inspired** — professional, fast, keyboard-first
-- **Dense** — 44px table rows, compact spacing, 14px body text
-- **Minimal decorations** — let the data speak
-- **Subtle shadows** — cards and panels have light shadows
-- **Rounded corners** — 6px for buttons, 8px for cards
-- **Uppercase labels** — for metric cards, table headers, section titles
-- **Status badges** — small, colored, consistent throughout
-- **Urgency badges** — red "DUE" and amber "SOON" for upcoming deadlines
-
----
-
-## Color Reference for Status Badges
-
-| Status         | Background | Text    |
-| -------------- | ---------- | ------- |
-| To Apply       | #F3F4F6    | #6B7280 |
-| In Progress    | #EEF2FF    | #4F46E5 |
-| Submitted      | #FEF3C7    | #D97706 |
-| Approved Award | #D1FAE5    | #059669 |
-| Declined Award | #FEE2E2    | #DC2626 |
-| Declined LOI   | #FEE2E2    | #DC2626 |
-
-## Color Reference for Urgency Badges
-
-| Urgency       | Background | Text    | Label |
-| ------------- | ---------- | ------- | ----- |
-| Due < 7 days  | #FEE2E2    | #DC2626 | DUE   |
-| Due < 30 days | #FEF3C7    | #D97706 | SOON  |
+- Do not create README.md files, design docs, or standalone guides unless explicitly requested.
+- Keep `AGENTS.md` updated when project structure changes meaningfully.
+- Document architecture decisions in `DECISIONS.md` under `dispatch/`.
+- After each session, use `/remember save` to persist state. Reset dispatch working files on successful save.
+
+## Current Repository State
+
+### Implemented
+- Next.js 16.3.0 scaffold with React 19.2.8, TypeScript, Tailwind CSS v4
+- Inter font via `next/font` with `--font-sans` CSS variable
+- Full design token system in `src/app/globals.css` — light-only, Linear-inspired, dense spacing, complete color/badge/typography/shadow variables mapped through `@theme inline`
+- Root layout (`layout.tsx`) with Inter integration and basic `h-full` structure
+- Default `create-next-app` boilerplate in `page.tsx` (no GrantFlow screens built)
+- Design screenshots in `screenshots/` directory (dashboard, grants, funders, deadlines, login, grant detail, slide-over panel, landing, index)
+- `data/mock-grant-data.xlsx` — sample spreadsheet data
+- Dispatch workflow files under `dispatch/`
+- Project documentation files: `context/architecture.md`, `context/tech-stack.md`, `context/database.md`, `context/coding-standards.md`, `context/design.md`, `context/index.md`, `dispatch/DECISIONS.md`
+
+### Not Implemented
+- **shadcn/ui** — Not installed. `globals.css` is pre-configured for it, but `npx shadcn@latest init` has not been run.
+- **Database / Prisma** — No `prisma/` directory, no schema, no migrations, no database client.
+- **Clerk** — Not installed or configured. No auth middleware, sign-in pages, or session handling.
+- **Supabase Storage** — Not configured. File upload infrastructure absent.
+- **API / Server Actions** — No route handlers or server actions. `src/app/` has only the root page and layout.
+- **Tests** — No test framework, test files, or test scripts in `package.json`.
+- **Environment configuration** — No `.env` files, no environment variable validation.
+- **Any functional GrantFlow screen** — No dashboard, grants list, grant detail, funder list, deadlines, login, search, filter chips, empty states, or slide-over panels exist.
+- **README.md** — Still default `create-next-app` boilerplate. Does not describe GrantFlow.
+
+### Pre-Existing User Changes (Preserved, Not Altered)
+- `CLAUDE.md` — Was deleted by user. Do not recreate.
+
+## Design Authority
+
+The visual design is **light mode only, Linear-inspired, dense, and professional**. The authoritative sources are:
+
+1. **`src/app/globals.css`** — Complete design token system (colors, type scale, layout metrics, shadows, motion, badge/avatar/sidebar tokens). All new UI must use these tokens only.
+2. **`screenshots/`** — PNG mockups of all screens (dashboard, grants list, grant detail, funder list, deadlines, login, slide-over panel, landing page, index/empty state). Match pixel-for-pixel.
+
+Do not introduce new colors, spacing values, or layout dimensions without an explicit decision captured in `DECISIONS.md`.
+Do not duplicate token tables from `globals.css` into other docs — reference the CSS file.
