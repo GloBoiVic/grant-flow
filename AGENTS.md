@@ -77,7 +77,7 @@ When in doubt, ask: "Does this directly help a grant professional spend less tim
 
 ## Security & Reliability Expectations
 
-These are **design constraints**, not implementation status. None of these systems are built yet.
+These are **design constraints** for all implementation work. Where noted, foundational pieces are now in place (see Current Repository State); remaining items are not yet built.
 
 - **Auth** — Clerk for authentication. No custom auth.
 - **Authorization** — Role-based access within an organization. Users see only their org's data.
@@ -116,17 +116,18 @@ These are **design constraints**, not implementation status. None of these syste
 - `data/mock-grant-data.xlsx` — sample spreadsheet data
 - Dispatch workflow files under `dispatch/`
 - Project documentation files: `context/architecture.md`, `context/tech-stack.md`, `context/database.md`, `context/coding-standards.md`, `context/design.md`, `context/index.md`, `dispatch/DECISIONS.md`
+- Prisma 7.9.1 persistence foundation (GF-DATA-001): `prisma/schema.prisma` (11 models, 3 enums), `prisma.config.ts`, initial migration `20260810055726_init`, server-only singleton `src/lib/prisma.ts` with `PrismaPg` adapter, generated client under `src/generated/prisma/`, `.env.example` placeholder only. Committed at `0402ada`. Prisma Compute deployed.
+- Clerk authentication and organization access (GF-AUTH-001, **In Progress — manual gates open**): `@clerk/nextjs` installed; `src/proxy.ts` middleware protecting all routes except `/login`, `/sign-up`, `/api/webhooks/clerk`; `ClerkProvider` authenticated sub-layout under `src/app/(authenticated)/`; Clerk-native sign-in/sign-up pages matching `screenshots/login.png`; server-only adapter in `src/lib/clerk/` (session, roles, projections, authorization, webhook); signature-verified + Zod-validated webhook route `src/app/api/webhooks/clerk/route.ts`; Membership incarnation fencing via expand-only migration `20260813000000_add_membership_clerk_membership_id` (nullable unique `clerkMembershipId`; Clerk-backed backfill and NOT NULL contraction deferred).
+- Vitest + React Testing Library test tooling (GF-AUTH-001): `vitest.config.ts`, 5 test files in `src/test/` (42 tests passing). Reconciled after Task 7: 7 test files in `src/test/` (60 tests passing).
+- `.env.example` — secret-safe placeholders for `DATABASE_URL`, Clerk keys, and webhook signing secret; no credentials committed.
 
 ### Not Implemented
 - **shadcn/ui** — Not installed. `globals.css` is pre-configured for it, but `npx shadcn@latest init` has not been run.
-- **Database / Prisma** — No `prisma/` directory, no schema, no migrations, no database client.
-- **Clerk** — Not installed or configured. No auth middleware, sign-in pages, or session handling.
 - **Supabase Storage** — Not configured. File upload infrastructure absent.
-- **API / Server Actions** — No route handlers or server actions. `src/app/` has only the root page and layout.
-- **Tests** — No test framework, test files, or test scripts in `package.json`.
-- **Environment configuration** — No `.env` files, no environment variable validation.
-- **Any functional GrantFlow screen** — No dashboard, grants list, grant detail, funder list, deadlines, login, search, filter chips, empty states, or slide-over panels exist.
+- **Server Actions / domain route handlers** — Webhook route handler exists; no domain Server Actions or query modules yet.
+- **Any functional GrantFlow screen** — No dashboard content, grants list, grant detail, funder list, deadlines, search, filter chips, empty states, or slide-over panels exist (auth boundary pages only).
 - **README.md** — Still default `create-next-app` boilerplate. Does not describe GrantFlow.
+- **Terminal closure for GF-AUTH-001** — Manual Clerk configuration verification and final review sign-off remain.
 
 ### Pre-Existing User Changes (Preserved, Not Altered)
 - `CLAUDE.md` — Was deleted by user. Do not recreate.

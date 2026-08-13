@@ -67,13 +67,14 @@ model User {
 }
 
 model Membership {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  userId         String         @db.Uuid
-  role           MembershipRole
-  createdAt      DateTime       @default(now()) @db.Timestamptz
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @db.Uuid
+  userId            String         @db.Uuid
+  clerkMembershipId String?        @unique
+  role              MembershipRole
+  createdAt         DateTime       @default(now()) @db.Timestamptz
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  user              User           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@unique([organizationId, userId])
   @@index([organizationId, userId])
