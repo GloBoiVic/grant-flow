@@ -1,17 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authMock, resolveIdentityProjectionMock, redirectMock } = vi.hoisted(() => ({
+const { authMock, resolveIdentityProjectionMock, redirectMock, shellIdentityMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   resolveIdentityProjectionMock: vi.fn(),
   redirectMock: vi.fn((path: string): never => {
     throw new Error(`REDIRECT:${path}`);
   }),
+  shellIdentityMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
 vi.mock("@/lib/clerk/projections", () => ({
   resolveIdentityProjection: resolveIdentityProjectionMock,
+}));
+vi.mock("@/lib/queries/shell-identity", () => ({
+  getShellIdentity: shellIdentityMock,
+  ShellIdentityProjectionMissingError: class ShellIdentityProjectionMissingError extends Error {},
 }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
@@ -51,6 +56,13 @@ describe("Clerk role mapping", () => {
 describe("requireAuthorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    shellIdentityMock.mockResolvedValue({
+      organizationName: "Grant Makers",
+      userName: "Jane Doe",
+      userEmail: "jane@example.com",
+      userAvatarUrl: null,
+      userInitials: "JD",
+    });
     resolveIdentityProjectionMock.mockResolvedValue({
       status: "ready",
       projection: { userId: "local-user", organizationId: "local-org", role: "MEMBER" },
@@ -153,7 +165,16 @@ describe("organization-required route guard integration", () => {
 
   it("guards the server-rendered route before returning children", async () => {
     const children = "protected content";
-    await expect(OrganizationRequiredLayout({ children })).resolves.toBe(children);
+    await expect(OrganizationRequiredLayout({ children })).resolves.toMatchObject({
+      props: { children },
+    });
     expect(resolveIdentityProjectionMock).toHaveBeenCalledWith("clerk-user", "clerk-org");
+    expect(shellIdentityMock).toHaveBeenCalledWith({
+      clerkUserId: "clerk-user",
+      clerkOrgId: "clerk-org",
+      userId: "local-user",
+      organizationId: "local-org",
+      role: "MEMBER",
+    });
   });
 });

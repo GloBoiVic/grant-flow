@@ -13,8 +13,7 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 @import "tailwindcss";
-/* `tw-animate-css` is imported automatically by `npx shadcn@latest init`
-   once shadcn components are added. It's intentionally omitted until then. */
+@import "tw-animate-css";
 
 /*
    GrantFlow is light-mode only, so there is no .dark block.
