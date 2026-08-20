@@ -28,6 +28,7 @@ describe("getShellIdentity", () => {
     vi.clearAllMocks();
     membershipFindUniqueMock.mockResolvedValue({
       organization: { name: "Grant Makers" },
+      organizationId: "local-org",
       user: {
         name: "Jane Q. Doe",
         email: "jane@example.com",
@@ -36,17 +37,13 @@ describe("getShellIdentity", () => {
     });
   });
 
-  it("uses the local composite membership scope and narrow nested selection", async () => {
+  it("uses the immutable user binding and narrow nested selection", async () => {
     await getShellIdentity(authorization);
 
     expect(membershipFindUniqueMock).toHaveBeenCalledWith({
-      where: {
-        organizationId_userId: {
-          organizationId: "local-org",
-          userId: "local-user",
-        },
-      },
+      where: { userId: "local-user" },
       select: {
+        organizationId: true,
         organization: { select: { name: true } },
         user: { select: { name: true, email: true, avatarUrl: true } },
       },
@@ -70,6 +67,7 @@ describe("getShellIdentity", () => {
   ])("derives deterministic initials for %s", async (name, initials) => {
     membershipFindUniqueMock.mockResolvedValue({
       organization: { name: "Grant Makers" },
+      organizationId: "local-org",
       user: { name, email: "user@example.com", avatarUrl: null },
     });
 

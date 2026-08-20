@@ -15,17 +15,17 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { findIdentityProjection } from "@/lib/clerk/projections";
+import { findIdentityProjection, resolveIdentityProjection } from "@/lib/clerk/projections";
 
 describe("findIdentityProjection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    userFindUniqueMock.mockResolvedValue({ id: "local-user" });
+  userFindUniqueMock.mockResolvedValue({ id: "local-user", clerkDeletedAt: null, tenantIsolationLockedAt: null });
     organizationFindUniqueMock.mockResolvedValue({ id: "local-org" });
-    membershipFindUniqueMock.mockResolvedValue({ role: "MEMBER" });
+   membershipFindUniqueMock.mockResolvedValue({ role: "MEMBER", roleSyncStatus: "KNOWN", organizationId: "local-org", clerkMembershipId: "membership-1", clerkDeletedAt: null });
   });
 
-  it("resolves the user and organization directly, then scopes membership by their composite key", async () => {
+  it("resolves the user and organization directly, then scopes membership by its sole user key", async () => {
     await expect(findIdentityProjection("clerk-user", "clerk-org")).resolves.toEqual({
       userId: "local-user",
       organizationId: "local-org",
@@ -34,7 +34,7 @@ describe("findIdentityProjection", () => {
 
     expect(userFindUniqueMock).toHaveBeenCalledWith({
       where: { clerkUserId: "clerk-user" },
-      select: { id: true },
+      select: { id: true, clerkDeletedAt: true, tenantIsolationLockedAt: true },
     });
     expect(organizationFindUniqueMock).toHaveBeenCalledWith({
       where: { clerkOrgId: "clerk-org" },
@@ -42,12 +42,9 @@ describe("findIdentityProjection", () => {
     });
     expect(membershipFindUniqueMock).toHaveBeenCalledWith({
       where: {
-        organizationId_userId: {
-          organizationId: "local-org",
-          userId: "local-user",
-        },
+        userId: "local-user",
       },
-      select: { role: true },
+        select: { role: true, roleSyncStatus: true, organizationId: true, clerkMembershipId: true, clerkDeletedAt: true },
     });
   });
 
@@ -57,8 +54,13 @@ describe("findIdentityProjection", () => {
     expect(membershipFindUniqueMock).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the composite membership is missing", async () => {
+  it("fails closed when the bound membership is missing", async () => {
     membershipFindUniqueMock.mockResolvedValue(null);
     await expect(findIdentityProjection("clerk-user", "clerk-org")).resolves.toBeNull();
+  });
+
+  it("returns a distinct denial for an unknown persisted role diagnostic", async () => {
+    membershipFindUniqueMock.mockResolvedValue({ role: null, roleSyncStatus: "UNKNOWN", organizationId: "local-org", clerkMembershipId: "membership-1", clerkDeletedAt: null });
+    await expect(resolveIdentityProjection("clerk-user", "clerk-org")).resolves.toEqual({ status: "unknown-role" });
   });
 });

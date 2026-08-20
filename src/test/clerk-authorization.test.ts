@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authMock, resolveIdentityProjectionMock, redirectMock, shellIdentityMock } = vi.hoisted(() => ({
+const { authMock, resolveIdentityProjectionMock, resolveOnboardingEligibilityMock, redirectMock, shellIdentityMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   resolveIdentityProjectionMock: vi.fn(),
+  resolveOnboardingEligibilityMock: vi.fn().mockResolvedValue("denied"),
   redirectMock: vi.fn((path: string): never => {
     throw new Error(`REDIRECT:${path}`);
   }),
@@ -13,6 +14,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
 vi.mock("@/lib/clerk/projections", () => ({
   resolveIdentityProjection: resolveIdentityProjectionMock,
+  resolveOnboardingEligibility: resolveOnboardingEligibilityMock,
 }));
 vi.mock("@/lib/queries/shell-identity", () => ({
   getShellIdentity: shellIdentityMock,
@@ -35,8 +37,8 @@ describe("Clerk role mapping", () => {
   it.each([
     ["org:admin", "ADMIN"],
     ["org:member", "MEMBER"],
-    [undefined, "VIEWER"],
-    ["org:unknown", "VIEWER"],
+    [undefined, null],
+    ["org:unknown", null],
   ])("maps %s to %s", (clerkRole, localRole) => {
     expect(mapClerkRole(clerkRole)).toBe(localRole);
   });
@@ -100,7 +102,7 @@ describe("requireAuthorization", () => {
 
   it("distinguishes an authenticated user without an active organization", async () => {
     authMock.mockResolvedValue({ userId: "u", orgId: null, orgRole: "org:member" });
-    await expect(requireAuthorization()).rejects.toMatchObject({ code: "NO_ACTIVE_ORGANIZATION" });
+    await expect(requireAuthorization()).rejects.toMatchObject({ code: "PROJECTION_MISSING" });
   });
 
   it("fails closed for a missing projection", async () => {
@@ -121,6 +123,20 @@ describe("requireAuthorization", () => {
     await expect(requireAuthorization()).rejects.toMatchObject({ code: "ROLE_MISMATCH" });
   });
 
+  it.each([null, undefined, "org:unknown"]) ("denies a missing or unknown Clerk role (%s)", async (orgRole) => {
+    authMock.mockResolvedValue({ userId: "clerk-user", orgId: "clerk-org", orgRole });
+    await expect(requireAuthorization()).rejects.toMatchObject({ code: "ROLE_MISMATCH" });
+    expect(resolveIdentityProjectionMock).toHaveBeenCalledWith("clerk-user", "clerk-org");
+  });
+
+  it("denies a session organization that does not match the immutable local binding", async () => {
+    resolveIdentityProjectionMock.mockResolvedValue({
+      status: "missing-membership",
+    });
+    authMock.mockResolvedValue({ userId: "clerk-user", orgId: "different-clerk-org", orgRole: "org:member" });
+    await expect(requireAuthorization()).rejects.toMatchObject({ code: "PROJECTION_MISSING" });
+  });
+
   it("returns a typed failure for Server Actions", async () => {
     authMock.mockResolvedValue({ userId: null, orgId: null, orgRole: null });
     await expect(authorizeAction()).resolves.toEqual({
@@ -132,7 +148,7 @@ describe("requireAuthorization", () => {
 
   it.each([
     [{ userId: null, orgId: null, orgRole: null }, "/login"],
-    [{ userId: "u", orgId: null, orgRole: "org:member" }, "/organization"],
+    [{ userId: "u", orgId: null, orgRole: "org:member" }, "/access"],
   ])("redirects route guards safely for session state", async (session, path) => {
     authMock.mockResolvedValue(session);
     await expect(requireAuthorizationOrRedirect()).rejects.toThrow(`REDIRECT:${path}`);

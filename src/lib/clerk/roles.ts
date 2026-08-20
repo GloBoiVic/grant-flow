@@ -21,10 +21,14 @@ export type MembershipRole = (typeof MembershipRole)[keyof typeof MembershipRole
 export type ClerkOrganizationRole = string | null | undefined;
 
 /** Map the Clerk role vocabulary to the deliberately smaller local vocabulary. */
-export function mapClerkRole(role: ClerkOrganizationRole): MembershipRole {
+export function mapClerkRole(role: ClerkOrganizationRole): MembershipRole | null {
   if (role === "org:admin") return MembershipRole.ADMIN;
   if (role === "org:member") return MembershipRole.MEMBER;
-  return MembershipRole.VIEWER;
+  return null;
+}
+
+export function isRecognizedClerkRole(role: ClerkOrganizationRole): role is "org:admin" | "org:member" {
+  return role === "org:admin" || role === "org:member";
 }
 
 export function isRoleAtLeast(

@@ -1,101 +1,146 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn() }));
 
-import { MalformedIdentityPayloadError, MembershipReconciliationUnavailableError, MissingMembershipParentError, parseClerkWebhook, processClerkWebhook, type IdentityWebhookDb } from "@/lib/clerk/webhook";
+import { IdentityConflictError, parseClerkWebhook, processClerkWebhook, type IdentityWebhookDb } from "@/lib/clerk/webhook";
 
-const organization = { id: "org_1", name: "Org", slug: "org" };
-const user = {
-  id: "user_1", first_name: "A", last_name: "User", image_url: "", primary_email_address_id: "email_1",
-  email_addresses: [{ id: "email_1", email_address: "a@example.com" }],
-};
-const membership = { id: "mem_1", role: "org:member", organization, public_user_data: { user_id: "user_1" } };
+const organization = { id: "org_1", name: "Org", slug: "org", created_by: "user_1" };
+const user = { id: "user_1", first_name: "A", last_name: "User", image_url: "", primary_email_address_id: "email_1", email_addresses: [{ id: "email_1", email_address: "a@example.com" }] };
+const membership = { id: "mem_1", role: "org:admin", organization, public_user_data: { user_id: "user_1" } };
 const event = (type: string, data: unknown) => ({ type, object: "event", data });
-type TestDb = {
-  user: { upsert: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> };
-  organization: { upsert: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> };
-  membership: { upsert: ReturnType<typeof vi.fn>; deleteMany: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> };
-  $transaction: (fn: (tx: TestDb) => Promise<unknown>, options?: unknown) => Promise<unknown>;
-};
-const asDb = (db: TestDb) => db as unknown as IdentityWebhookDb;
 
-describe("Clerk webhook contract", () => {
-  it("parses all seven supported branches and ignores unsupported ones", () => {
-    for (const [type, data] of [
-      ["user.created", user], ["user.updated", user], ["organization.created", organization],
-      ["organization.updated", organization], ["organizationMembership.created", membership],
-      ["organizationMembership.updated", membership], ["organizationMembership.deleted", membership],
-    ] as const) expect(parseClerkWebhook(event(type, data))).toBeTruthy();
+function db(overrides: Record<string, unknown> = {}): IdentityWebhookDb {
+  const userRecord = { id: "u", tenantIsolationLockedAt: null as Date | null, clerkDeletedAt: null as Date | null };
+  let membershipRecord: { organizationId: string; clerkMembershipId: string; clerkDeletedAt: Date | null; role: string | null; roleSyncStatus: string; clerkRoleUpdatedAt: Date | null } | null = null;
+  const value = {
+    user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u", tenantIsolationLockedAt: null }), update: vi.fn() },
+    organization: { upsert: vi.fn().mockResolvedValue({ id: "o" }), findUnique: vi.fn().mockResolvedValue({ id: "o" }), update: vi.fn() },
+    membership: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
+    organizationProvisioning: { findUnique: vi.fn().mockResolvedValue({ status: "PENDING", clerkOrgId: "org_1" }), update: vi.fn(), upsert: vi.fn() },
+    $transaction: vi.fn(),
+    ...overrides,
+  };
+  if (!overrides.user) {
+    value.user.findUnique.mockImplementation(async () => userRecord);
+    value.user.update.mockImplementation(async ({ data }: { data: Partial<typeof userRecord> }) => Object.assign(userRecord, data));
+  }
+  if (!overrides.membership) {
+    value.membership.findUnique.mockImplementation(async () => membershipRecord);
+    value.membership.create.mockImplementation(async ({ data }: { data: NonNullable<typeof membershipRecord> }) => {
+      membershipRecord = { ...data };
+      return membershipRecord;
+    });
+    value.membership.update.mockImplementation(async ({ data }: { data: Partial<NonNullable<typeof membershipRecord>> }) => {
+      if (membershipRecord) Object.assign(membershipRecord, data);
+    });
+  }
+  value.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(value));
+  return value as unknown as IdentityWebhookDb;
+}
+
+describe("permanent work identity webhook policy", () => {
+  it("validates supported identity payloads and ignores unsupported notifications", () => {
+    expect(parseClerkWebhook(event("user.created", user))).toBeTruthy();
+    expect(parseClerkWebhook(event("user.deleted", { id: "user_1" }))).toBeTruthy();
     expect(parseClerkWebhook(event("session.created", {}))).toBeNull();
   });
 
-  it("rejects a structurally unusable identity payload as malformed", () => {
-    expect(() => parseClerkWebhook(event("user.created", { ...user, primary_email_address_id: null }))).toThrowError(/primary email/);
-    expect(() => parseClerkWebhook(event("user.created", { ...user, email_addresses: [] }))).toThrow();
+  it("creates the first membership only when the durable claim matches", async () => {
+    const value = db();
+    await processClerkWebhook(value, event("organizationMembership.created", membership));
+    expect(value.membership.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: "u", organizationId: "o", clerkMembershipId: "mem_1" }) });
+    expect(value.organizationProvisioning.update).toHaveBeenCalledWith({ where: { userId: "u" }, data: { status: "COMPLETED" } });
   });
 
-  it("uses Clerk's current membership identity and role for create/update", async () => {
-    const upsert = vi.fn();
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { upsert, deleteMany: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) }, $transaction: async (fn) => fn(db) };
-    await processClerkWebhook(asDb(db), event("organizationMembership.updated", { ...membership, role: "org:admin" }), {
-      getCurrentMembership: vi.fn().mockResolvedValue({ id: "mem_current", role: "org:member" }),
+  it("locks rather than binding an unclaimed membership", async () => {
+    const value = db({ organizationProvisioning: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn(), upsert: vi.fn() } });
+    await expect(processClerkWebhook(value, event("organizationMembership.created", membership))).resolves.toEqual({ status: "conflict", code: "UNCLAIMED_MEMBERSHIP" });
+    expect(value.user.update).toHaveBeenCalledWith({ where: { id: "u" }, data: { tenantIsolationLockedAt: expect.any(Date) } });
+    expect(value.membership.create).not.toHaveBeenCalled();
+  });
+
+  it("locks every second or replacement membership without changing the binding", async () => {
+    const value = db({ membership: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn().mockResolvedValue({ organizationId: "o", clerkMembershipId: "old", clerkDeletedAt: null }) } });
+    await expect(processClerkWebhook(value, event("organizationMembership.created", membership))).resolves.toEqual({ status: "conflict", code: "SECOND_MEMBERSHIP" });
+    expect(value.user.update).toHaveBeenCalled();
+    expect(value.membership.update).not.toHaveBeenCalled();
+  });
+
+  it("permanently revokes the exact incarnation and ignores delayed recreation", async () => {
+    const repositoryMembership = { organizationId: "o", clerkMembershipId: "mem_1", clerkDeletedAt: null as Date | null, role: "ADMIN", roleSyncStatus: "KNOWN", clerkRoleUpdatedAt: null as Date | null };
+    const value = db({
+      membership: {
+        create: vi.fn(),
+        update: vi.fn(async ({ data }: { data: Partial<typeof repositoryMembership> }) => Object.assign(repositoryMembership, data)),
+        findUnique: vi.fn().mockResolvedValue(repositoryMembership),
+      },
     });
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { clerkMembershipId: "mem_current", role: "MEMBER" }, create: expect.objectContaining({ clerkMembershipId: "mem_current", role: "MEMBER" }) }));
+    await processClerkWebhook(value, event("organizationMembership.deleted", membership));
+    expect(value.membership.update).toHaveBeenCalledWith({ where: { userId: "u" }, data: { clerkDeletedAt: expect.any(Date) } });
+    await processClerkWebhook(value, event("organizationMembership.created", membership));
+    expect(value.membership.create).not.toHaveBeenCalled();
+    expect(value.membership.update).toHaveBeenCalledTimes(1);
+    expect(value.membership.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { userId: "u" } }));
+    expect(repositoryMembership.clerkDeletedAt).toEqual(expect.any(Date));
   });
 
-  it("does not let a stale delete remove a recreated membership", async () => {
-    const deleteMany = vi.fn();
-    const upsert = vi.fn();
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { deleteMany, upsert, findUnique: vi.fn().mockResolvedValue({ clerkMembershipId: "mem_recreated" }) }, $transaction: async (fn) => fn(db) };
-    await processClerkWebhook(asDb(db), event("organizationMembership.deleted", membership), { getCurrentMembership: vi.fn().mockResolvedValue({ id: "mem_recreated", role: "org:member" }) });
-    expect(deleteMany).not.toHaveBeenCalled();
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { clerkMembershipId: "mem_recreated", role: "MEMBER" } }));
+  it("does not move a fenced revocation timestamp backwards", async () => {
+    const currentDeletion = new Date("2026-08-20T12:00:00.000Z");
+    const value = db({
+      membership: {
+        create: vi.fn(),
+        update: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({
+          organizationId: "o",
+          clerkMembershipId: "mem_1",
+          clerkDeletedAt: currentDeletion,
+        }),
+      },
+    });
+
+    await processClerkWebhook(value, event("organizationMembership.deleted", {
+      ...membership,
+      deleted_at: Math.floor(new Date("2026-08-19T12:00:00.000Z").getTime() / 1000),
+    }));
+
+    expect(value.membership.update).not.toHaveBeenCalled();
   });
 
-  it("reconciles a same-id active delete event instead of deleting", async () => {
-    const deleteMany = vi.fn();
-    const upsert = vi.fn();
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { deleteMany, upsert, findUnique: vi.fn().mockResolvedValue({ clerkMembershipId: "mem_1" }) }, $transaction: async (fn) => fn(db) };
-    await processClerkWebhook(asDb(db), event("organizationMembership.deleted", { ...membership, role: "org:member" }), { getCurrentMembership: vi.fn().mockResolvedValue({ id: "mem_1", role: "org:admin" }) });
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { clerkMembershipId: "mem_1", role: "ADMIN" }, create: expect.objectContaining({ clerkMembershipId: "mem_1" }) }));
-    expect(deleteMany).not.toHaveBeenCalled();
+  it("fences duplicate, stale, and newer user deletion events by signed event time", async () => {
+    const value = db();
+    const deletion = { id: "user_1", deleted_at: "2026-08-20T12:00:00.000Z" };
+    await processClerkWebhook(value, event("user.deleted", deletion));
+    await processClerkWebhook(value, event("user.deleted", deletion));
+    await processClerkWebhook(value, event("user.deleted", { ...deletion, deleted_at: "2026-08-19T12:00:00.000Z" }));
+    await processClerkWebhook(value, event("user.deleted", { ...deletion, deleted_at: "2026-08-21T12:00:00.000Z" }));
+
+    expect(value.user.update).toHaveBeenCalledTimes(2);
+    expect(value.user.update).toHaveBeenLastCalledWith({
+      where: { clerkUserId: "user_1" },
+      data: { clerkDeletedAt: new Date("2026-08-21T12:00:00.000Z") },
+    });
   });
 
-  it("deletes only the exact membership triple after Clerk confirms it is gone", async () => {
-    const deleteMany = vi.fn();
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { deleteMany, upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ clerkMembershipId: "mem_1" }) }, $transaction: async (fn) => fn(db) };
-    await processClerkWebhook(asDb(db), event("organizationMembership.deleted", membership), { getCurrentMembership: vi.fn().mockResolvedValue(null) });
-    expect(deleteMany).toHaveBeenCalledWith({ where: { organizationId: "o", userId: "u", clerkMembershipId: "mem_1" } });
+  it("persists an unknown role as a diagnostic denial, never as VIEWER or the prior role", async () => {
+    const value = db({
+      membership: {
+        create: vi.fn(),
+        update: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({ organizationId: "o", clerkMembershipId: "mem_1", clerkDeletedAt: null, role: "ADMIN", roleSyncStatus: "KNOWN", clerkRoleUpdatedAt: null }),
+      },
+    });
+
+    await processClerkWebhook(value, event("organizationMembership.updated", { ...membership, role: "org:owner", updated_at: Math.floor(new Date("2026-08-20T12:00:00Z").getTime() / 1000) }));
+
+    expect(value.membership.update).toHaveBeenCalledWith({
+      where: { userId: "u" },
+      data: { role: null, roleSyncStatus: "UNKNOWN", clerkRoleUpdatedAt: new Date("2026-08-20T12:00:00.000Z") },
+    });
   });
 
-  it("retries serializable conflicts with bounded attempts", async () => {
-    let attempts = 0;
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) }, $transaction: async (fn) => { attempts += 1; if (attempts < 3) throw Object.assign(new Error("serialization"), { code: "P2034" }); return fn(db); } };
-    await processClerkWebhook(asDb(db), event("organizationMembership.updated", membership), { getCurrentMembership: vi.fn().mockResolvedValue({ id: "mem_1", role: "org:member" }) });
-    expect(attempts).toBe(3);
-  });
-
-  it("maps exhausted P2034 retries to a retryable processor error", async () => {
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) }, $transaction: async () => { throw Object.assign(new Error("serialization"), { code: "P2034" }); } };
-    await expect(processClerkWebhook(asDb(db), event("organizationMembership.updated", membership), { getCurrentMembership: vi.fn().mockResolvedValue({ id: "mem_1", role: "org:member" }) })).rejects.toMatchObject({ retryable: true });
-  });
-
-  it("never deletes an unresolved legacy membership", async () => {
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u" }) }, organization: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "o" }) }, membership: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn().mockResolvedValue({ clerkMembershipId: null }) }, $transaction: async (fn) => fn(db) };
-    await expect(processClerkWebhook(asDb(db), event("organizationMembership.deleted", membership), { getCurrentMembership: vi.fn().mockResolvedValue(null) })).rejects.toBeInstanceOf(MembershipReconciliationUnavailableError);
-    expect(db.membership.deleteMany).not.toHaveBeenCalled();
-  });
-
-  it("fails closed for missing parents and preserves retryable failures", async () => {
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) }, organization: { upsert: vi.fn(), findUnique: vi.fn() }, membership: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn() }, $transaction: async (fn) => fn(db) };
-    await expect(processClerkWebhook(asDb(db), event("organizationMembership.created", membership), { getCurrentMembership: vi.fn() })).rejects.toBeInstanceOf(MissingMembershipParentError);
-    await expect(processClerkWebhook(asDb({ ...db, user: { upsert: vi.fn().mockRejectedValue(new Error("temporary")), findUnique: vi.fn() } }), event("user.created", user))).rejects.toThrow("temporary");
-  });
-
-  it("keeps identity normalization errors typed as permanent", async () => {
-    const db: TestDb = { user: { upsert: vi.fn(), findUnique: vi.fn() }, organization: { upsert: vi.fn(), findUnique: vi.fn() }, membership: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn() }, $transaction: async (fn) => fn(db) };
-    await expect(processClerkWebhook(asDb(db), event("user.created", { ...user, primary_email_address_id: null }))).rejects.toBeInstanceOf(Error);
-    expect(MalformedIdentityPayloadError).toBeDefined();
+  it("keeps conflict errors typed and sanitized", () => {
+    const error = new IdentityConflictError("SECOND_MEMBERSHIP");
+    expect(error.message).toBe("Identity conflict");
+    expect(error.code).toBe("SECOND_MEMBERSHIP");
   });
 });

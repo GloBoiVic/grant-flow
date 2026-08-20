@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { mapClerkRole, isRoleAtLeast } from "@/lib/clerk/roles";
 import { getClerkSessionState } from "@/lib/clerk/session";
-import { resolveIdentityProjection } from "@/lib/clerk/projections";
+import { resolveIdentityProjection, resolveOnboardingEligibility } from "@/lib/clerk/projections";
 import type { MembershipRole } from "@/lib/clerk/roles";
 
 export type AuthorizationContext = {
@@ -19,6 +19,8 @@ export type AuthorizationFailureCode =
   | "UNAUTHENTICATED"
   | "NO_ACTIVE_ORGANIZATION"
   | "PROJECTION_MISSING"
+  | "PERMANENTLY_REVOKED"
+  | "TENANT_ISOLATION_LOCKED"
   | "ROLE_MISMATCH"
   | "INSUFFICIENT_ROLE";
 
@@ -36,7 +38,11 @@ export type AuthorizationResolution =
   | { status: "authenticated"; context: AuthorizationContext }
   | { status: "unauthenticated" }
   | { status: "no-active-organization" }
+  | { status: "onboarding-eligible" }
+  | { status: "onboarding-denied" }
   | { status: "projection-pending" }
+  | { status: "permanently-revoked" }
+  | { status: "tenant-isolation-locked" }
   | { status: "role-mismatch" }
   | { status: "insufficient-role" };
 
@@ -46,13 +52,22 @@ export async function resolveAuthorization(
 ): Promise<AuthorizationResolution> {
   const session = await getClerkSessionState();
   if (!session.authenticated) return { status: "unauthenticated" };
-  if (!session.orgId) return { status: "no-active-organization" };
+  if (!session.orgId) {
+    const onboarding = await resolveOnboardingEligibility(session.userId);
+    if (onboarding === "eligible") return { status: "onboarding-eligible" };
+    if (onboarding === "revoked") return { status: "permanently-revoked" };
+    if (onboarding === "tenant-isolation-locked") return { status: "tenant-isolation-locked" };
+    return { status: "onboarding-denied" };
+  }
 
   const projection = await resolveIdentityProjection(session.userId, session.orgId);
+  if (projection.status === "revoked") return { status: "permanently-revoked" };
+  if (projection.status === "tenant-isolation-locked") return { status: "tenant-isolation-locked" };
+  if (projection.status === "unknown-role") return { status: "role-mismatch" };
   if (projection.status !== "ready") return { status: "projection-pending" };
 
   const clerkRole = mapClerkRole(session.orgRole);
-  if (clerkRole !== projection.projection.role) return { status: "role-mismatch" };
+  if (clerkRole === null || clerkRole !== projection.projection.role) return { status: "role-mismatch" };
   if (minimumRole && !isRoleAtLeast(projection.projection.role, minimumRole)) {
     return { status: "insufficient-role" };
   }
@@ -91,7 +106,11 @@ export async function requireAuthorization(
   const codeByStatus = {
     unauthenticated: "UNAUTHENTICATED",
     "no-active-organization": "NO_ACTIVE_ORGANIZATION",
+    "onboarding-eligible": "NO_ACTIVE_ORGANIZATION",
+    "onboarding-denied": "PROJECTION_MISSING",
     "projection-pending": "PROJECTION_MISSING",
+    "permanently-revoked": "PERMANENTLY_REVOKED",
+    "tenant-isolation-locked": "TENANT_ISOLATION_LOCKED",
     "role-mismatch": "ROLE_MISMATCH",
     "insufficient-role": "INSUFFICIENT_ROLE",
   } as const;
@@ -108,7 +127,7 @@ export async function requireAuthorizationOrRedirect(
     if (error instanceof AuthorizationError) {
       if (error.code === "UNAUTHENTICATED") redirect("/login");
       if (error.code === "NO_ACTIVE_ORGANIZATION") redirect("/organization");
-      if (error.code === "PROJECTION_MISSING" || error.code === "ROLE_MISMATCH") {
+      if (error.code === "PROJECTION_MISSING" || error.code === "ROLE_MISMATCH" || error.code === "PERMANENTLY_REVOKED" || error.code === "TENANT_ISOLATION_LOCKED") {
         redirect("/access");
       }
       throw error;

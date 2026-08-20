@@ -27,11 +27,22 @@ enum MembershipRole {
   VIEWER
 }
 
+enum MembershipRoleSyncStatus {
+  KNOWN
+  UNKNOWN
+}
+
 enum FunderType {
   FOUNDATION
   FAMILY_FUND
   CORPORATION
   OTHER
+}
+
+enum OrganizationProvisioningStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
 
 model Organization {
@@ -41,7 +52,9 @@ model Organization {
   slug           String          @unique
   createdAt      DateTime        @default(now()) @db.Timestamptz
   updatedAt      DateTime        @updatedAt @db.Timestamptz
+  creatorId      String?         @db.Uuid
   memberships    Membership[]
+  creator        User?           @relation("OrganizationCreator", fields: [creatorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   funders        Funder[]
   funderContacts FunderContact[]
   grants         Grant[]
@@ -49,34 +62,54 @@ model Organization {
   activities     Activity[]
   tags           Tag[]
   importStaging  ImportStaging[]
+
+  @@index([creatorId])
 }
 
 model User {
-  id                String       @id @default(uuid()) @db.Uuid
-  clerkUserId       String       @unique
-  email             String       @unique
-  name              String
-  avatarUrl         String?
-  createdAt         DateTime     @default(now()) @db.Timestamptz
-  updatedAt         DateTime     @updatedAt @db.Timestamptz
-  memberships       Membership[]
-  ownedGrants       Grant[]      @relation("GrantOwner")
-  createdGrants     Grant[]      @relation("GrantCreator")
-  uploadedDocuments Document[]   @relation("DocumentUploader")
-  activities        Activity[]   @relation("ActivityActor")
+  id                       String                    @id @default(uuid()) @db.Uuid
+  clerkUserId              String                    @unique
+  email                    String                    @unique
+  name                     String
+  avatarUrl                String?
+  clerkDeletedAt           DateTime?                 @db.Timestamptz
+  tenantIsolationLockedAt  DateTime?                 @db.Timestamptz
+  createdAt                DateTime                  @default(now()) @db.Timestamptz
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz
+  membership               Membership?
+  ownedGrants              Grant[]                   @relation("GrantOwner")
+  createdGrants            Grant[]                   @relation("GrantCreator")
+  uploadedDocuments        Document[]                @relation("DocumentUploader")
+  activities               Activity[]                @relation("ActivityActor")
+  createdOrganizations     Organization[]            @relation("OrganizationCreator")
+  organizationProvisioning OrganizationProvisioning?
+}
+
+model OrganizationProvisioning {
+  id          String                         @id @default(uuid()) @db.Uuid
+  userId      String                         @unique @db.Uuid
+  status      OrganizationProvisioningStatus
+  clerkOrgId  String?                        @unique
+  failureCode String?
+  createdAt   DateTime                       @default(now()) @db.Timestamptz
+  updatedAt   DateTime                       @updatedAt @db.Timestamptz
+  user        User                           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 }
 
 model Membership {
   id                String         @id @default(uuid()) @db.Uuid
   organizationId    String         @db.Uuid
   userId            String         @db.Uuid
-  clerkMembershipId String?        @unique
-  role              MembershipRole
+  clerkMembershipId String         @unique
+  role              MembershipRole?
+  roleSyncStatus    MembershipRoleSyncStatus @default(KNOWN)
+  clerkRoleUpdatedAt DateTime?     @db.Timestamptz
   createdAt         DateTime       @default(now()) @db.Timestamptz
+  clerkDeletedAt    DateTime?      @db.Timestamptz
   organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   user              User           @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  @@unique([organizationId, userId])
+  @@unique([userId])
   @@index([organizationId, userId])
 }
 

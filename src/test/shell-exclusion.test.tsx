@@ -16,11 +16,13 @@ vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("@/components/auth/projection-pending-retry", () => ({
   default: () => <button type="button" data-testid="retry">Check again</button>,
 }));
+vi.mock("@/components/auth/organization-onboarding-form", () => ({
+  default: () => <form data-testid="organization-onboarding" />,
+}));
 
 // Stub Clerk account/organization controls so the page can render without a
 // Clerk provider; we only assert the page itself never composes shell chrome.
 vi.mock("@clerk/nextjs", () => ({
-  OrganizationList: () => <div data-testid="organization-list" />,
   UserButton: () => <div data-testid="user-button" />,
 }));
 
@@ -49,11 +51,11 @@ describe("shell exclusion from /access and /organization", () => {
     }
   });
 
-  it("renders the organization picker without any shell chrome", () => {
-    render(<OrganizationPage />);
+  it("renders constrained onboarding without any shell chrome", async () => {
+    resolveAuthorizationMock.mockResolvedValue({ status: "onboarding-eligible" });
+    render(await OrganizationPage());
 
     expect(screen.getByRole("heading", { name: "Choose an organization" })).toBeInTheDocument();
-    expect(screen.getByTestId("organization-list")).toBeInTheDocument();
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
     for (const query of SHELL_CHROME_QUERIES) {
       expect(query()).not.toBeInTheDocument();

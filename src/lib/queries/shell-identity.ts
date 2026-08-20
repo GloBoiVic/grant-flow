@@ -19,6 +19,7 @@ export class ShellIdentityProjectionMissingError extends Error {
 }
 
 const shellIdentitySelect = {
+  organizationId: true,
   organization: { select: { name: true } },
   user: { select: { name: true, email: true, avatarUrl: true } },
 } as const;
@@ -34,16 +35,13 @@ export async function getShellIdentity(
   authorization: AuthorizationContext,
 ): Promise<ShellIdentityDto> {
   const membership = await prisma.membership.findUnique({
-    where: {
-      organizationId_userId: {
-        organizationId: authorization.organizationId,
-        userId: authorization.userId,
-      },
-    },
+    where: { userId: authorization.userId },
     select: shellIdentitySelect,
   });
 
-  if (!membership) throw new ShellIdentityProjectionMissingError();
+  if (!membership || membership.organizationId !== authorization.organizationId) {
+    throw new ShellIdentityProjectionMissingError();
+  }
 
   return {
     organizationName: membership.organization.name,
