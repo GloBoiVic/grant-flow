@@ -14,6 +14,7 @@ describe("permanent work-identity migration history", () => {
       "20260813000000_add_membership_clerk_membership_id",
       "20260816020000_permanent_work_identity_binding",
       "20260820090000_fail_closed_unknown_membership_role",
+      "20260820100000_onboarding_ordering_remediation",
     ]);
   });
 

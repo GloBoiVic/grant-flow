@@ -40,6 +40,7 @@ enum FunderType {
 }
 
 enum OrganizationProvisioningStatus {
+  PRE_BINDING
   PENDING
   COMPLETED
   FAILED
@@ -83,6 +84,14 @@ model User {
   activities               Activity[]                @relation("ActivityActor")
   createdOrganizations     Organization[]            @relation("OrganizationCreator")
   organizationProvisioning OrganizationProvisioning?
+}
+
+model UserDeletionFence {
+  id           String   @id @default(uuid()) @db.Uuid
+  clerkUserId  String   @unique
+  deletedAt    DateTime @db.Timestamptz
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
 }
 
 model OrganizationProvisioning {

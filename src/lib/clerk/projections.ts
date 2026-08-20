@@ -35,7 +35,7 @@ export async function resolveOnboardingEligibility(clerkUserId: string): Promise
   if (user.tenantIsolationLockedAt) return "tenant-isolation-locked";
   if (user.clerkDeletedAt) return "revoked";
   if (user.membership) return "denied";
-  return user.organizationProvisioning?.status === "PENDING" ? "eligible" : "denied";
+  return user.organizationProvisioning?.status === "PRE_BINDING" ? "eligible" : "denied";
 }
 
 export async function findIdentityProjection(

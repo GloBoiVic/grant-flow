@@ -28,6 +28,7 @@ const organization = z.object({
   slug: z.string().min(1),
   created_by: id.nullable().optional(),
   updated_at: webhookTimestamp,
+  private_metadata: z.record(z.string(), z.unknown()).optional(),
 });
 const membership = z.object({
   id,
@@ -58,7 +59,7 @@ const schemas = {
 } as const;
 
 export type SupportedWebhookType = keyof typeof schemas;
-export type IdentityWebhookDb = Pick<PrismaClient, "user" | "organization" | "membership" | "organizationProvisioning" | "$transaction">;
+export type IdentityWebhookDb = Pick<PrismaClient, "user" | "organization" | "membership" | "organizationProvisioning" | "userDeletionFence" | "$transaction">;
 
 export class MissingMembershipParentError extends Error {}
 export class MalformedIdentityPayloadError extends Error {}
@@ -108,6 +109,17 @@ function eventVersion(value: unknown, data: unknown): Date {
 
 function monotonicDate(current: Date | null | undefined, incoming: Date): Date {
   return current && current > incoming ? current : incoming;
+}
+
+function onboardingClaimId(metadata: Record<string, unknown> | undefined): string | null {
+  const direct = metadata?.grantflowOnboardingClaimId;
+  if (typeof direct === "string" && direct.length > 0) return direct;
+  const nested = metadata?.grantflow;
+  if (typeof nested === "object" && nested !== null && "onboardingClaimId" in nested) {
+    const value = (nested as { onboardingClaimId?: unknown }).onboardingClaimId;
+    return typeof value === "string" && value.length > 0 ? value : null;
+  }
+  return null;
 }
 
 async function processMembership(
@@ -192,6 +204,48 @@ async function processMembership(
   }
 }
 
+async function processUserProjection(
+  db: IdentityWebhookDb,
+  data: z.infer<typeof user>,
+): Promise<void> {
+  await db.$transaction(async (tx) => {
+    // The fence is checked in the same transaction as projection creation. This
+    // prevents a delayed create/update from re-opening a deleted identity.
+    const fence = await tx.userDeletionFence.findUnique({ where: { clerkUserId: data.id }, select: { id: true } });
+    if (fence) return;
+
+    const existing = await tx.user.findUnique({
+      where: { clerkUserId: data.id },
+      select: {
+        id: true,
+        clerkDeletedAt: true,
+        tenantIsolationLockedAt: true,
+        membership: { select: { id: true } },
+        organizationProvisioning: { select: { id: true } },
+      },
+    });
+    if (existing?.clerkDeletedAt) return;
+
+    if (!existing) {
+      await tx.user.upsert({
+        where: { clerkUserId: data.id },
+        update: userFields(data),
+        create: {
+          clerkUserId: data.id,
+          ...userFields(data),
+          organizationProvisioning: { create: { status: "PRE_BINDING" } },
+        },
+      });
+      return;
+    }
+
+    await tx.user.update({ where: { id: existing.id }, data: userFields(data) });
+    if (!existing.tenantIsolationLockedAt && !existing.membership && !existing.organizationProvisioning) {
+      await tx.organizationProvisioning.create({ data: { userId: existing.id, status: "PRE_BINDING" } });
+    }
+  }, { isolationLevel: "Serializable" });
+}
+
 function isSerializationConflict(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "P2034";
 }
@@ -210,14 +264,22 @@ export async function processClerkWebhook(
   const supportedType = type as SupportedWebhookType;
   if (type === "user.created" || type === "user.updated") {
     const data = (schemas[supportedType].parse(value) as z.infer<typeof schemas["user.created"]>).data;
-    await db.user.upsert({ where: { clerkUserId: data.id }, update: userFields(data), create: { clerkUserId: data.id, ...userFields(data) } });
+    await processUserProjection(db, data);
   } else if (type === "user.deleted") {
     const data = (schemas[supportedType].parse(value) as z.infer<typeof schemas["user.deleted"]>).data;
-     const version = eventVersion(value, data);
-     const current = await db.user.findUnique({ where: { clerkUserId: data.id }, select: { clerkDeletedAt: true } });
-     if (!current?.clerkDeletedAt || current.clerkDeletedAt < version) {
-       await db.user.update({ where: { clerkUserId: data.id }, data: { clerkDeletedAt: version } });
-     }
+    const version = eventVersion(value, data);
+    await db.$transaction(async (tx) => {
+      const fence = await tx.userDeletionFence.findUnique({ where: { clerkUserId: data.id }, select: { deletedAt: true } });
+      if (!fence) {
+        await tx.userDeletionFence.create({ data: { clerkUserId: data.id, deletedAt: version } });
+      } else if (fence.deletedAt < version) {
+        await tx.userDeletionFence.update({ where: { clerkUserId: data.id }, data: { deletedAt: version } });
+      }
+      await tx.user.updateMany({
+        where: { clerkUserId: data.id, OR: [{ clerkDeletedAt: null }, { clerkDeletedAt: { lt: version } }] },
+        data: { clerkDeletedAt: version },
+      });
+    }, { isolationLevel: "Serializable" });
   } else if (type === "organization.created" || type === "organization.updated") {
     const data = (schemas[supportedType].parse(value) as z.infer<typeof schemas["organization.created"]>).data;
     await db.$transaction(async (tx) => {
@@ -225,18 +287,11 @@ export async function processClerkWebhook(
       if (data.created_by) {
         const creator = await tx.user.findUnique({ where: { clerkUserId: data.created_by }, select: { id: true, clerkDeletedAt: true, tenantIsolationLockedAt: true, membership: { select: { id: true } } } });
         if (!creator) throw new MissingMembershipParentError();
-        if (!creator.clerkDeletedAt && !creator.tenantIsolationLockedAt && !creator.membership) {
+        const claimId = onboardingClaimId(data.private_metadata);
+        const claim = claimId ? await tx.organizationProvisioning.findUnique({ where: { id: claimId }, select: { id: true, userId: true, status: true, clerkOrgId: true } }) : null;
+        if (!creator.clerkDeletedAt && !creator.tenantIsolationLockedAt && !creator.membership && claim?.userId === creator.id && claim.status === "PENDING" && (!claim.clerkOrgId || claim.clerkOrgId === data.id)) {
           await tx.organization.update({ where: { id: organization.id }, data: { creatorId: creator.id } });
-           const claim = await tx.organizationProvisioning.findUnique({
-             where: { userId: creator.id },
-             select: { status: true, clerkOrgId: true },
-           });
-           if (claim?.status === "PENDING" && !claim.clerkOrgId) {
-             await tx.organizationProvisioning.update({
-               where: { userId: creator.id },
-               data: { clerkOrgId: data.id },
-             });
-           }
+          await tx.organizationProvisioning.updateMany({ where: { id: claim.id, status: "PENDING", clerkOrgId: null }, data: { clerkOrgId: data.id } });
         }
       }
     });

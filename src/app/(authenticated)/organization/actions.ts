@@ -38,17 +38,27 @@ export async function createFirstOrganization(
         clerkDeletedAt: true,
         tenantIsolationLockedAt: true,
         membership: { select: { id: true } },
-        organizationProvisioning: { select: { status: true, clerkOrgId: true } },
+        organizationProvisioning: { select: { id: true, status: true, clerkOrgId: true } },
       },
     });
     if (!user || user.clerkDeletedAt || user.tenantIsolationLockedAt || user.membership) return null;
-    if (user.organizationProvisioning) return { userId: user.id, isNew: false, ...user.organizationProvisioning };
-
-    const created = await tx.organizationProvisioning.create({
-      data: { userId: user.id, status: "PENDING" },
-      select: { status: true, clerkOrgId: true },
-    });
-    return { userId: user.id, isNew: true, ...created };
+    if (user.organizationProvisioning) {
+      if (user.organizationProvisioning.status !== "PRE_BINDING") {
+        return { userId: user.id, isNew: false, ...user.organizationProvisioning };
+      }
+      const claimed = await tx.organizationProvisioning.updateMany({
+        where: { userId: user.id, status: "PRE_BINDING", clerkOrgId: null },
+        data: { status: "PENDING" },
+      });
+      return {
+        userId: user.id,
+        id: user.organizationProvisioning.id,
+        isNew: claimed.count === 1,
+        status: "PENDING" as const,
+        clerkOrgId: null,
+      };
+    }
+    return null;
   });
 
   if (!claim) return { success: false, status: "denied", error: "Organization access is unavailable." };
@@ -69,6 +79,7 @@ export async function createFirstOrganization(
     const organization = await (await clerkClient()).organizations.createOrganization({
       name: parsed.data.name,
       createdBy: session.userId,
+      privateMetadata: { grantflowOnboardingClaimId: claim.id },
     });
     await prisma.organizationProvisioning.updateMany({
       where: { userId: claim.userId, status: "PENDING", clerkOrgId: null },
@@ -76,10 +87,9 @@ export async function createFirstOrganization(
     });
     return { success: true, status: "pending", clerkOrgId: organization.id };
   } catch {
-    await prisma.organizationProvisioning.updateMany({
-      where: { userId: claim.userId, status: "PENDING" },
-      data: { status: "FAILED", failureCode: "CLERK_CREATE_FAILED" },
-    });
+    // The Clerk response is ambiguous: the organization may have been created
+    // even though this request failed. Keep the durable claim PENDING so later
+    // correlated Clerk webhooks can complete the binding.
     return { success: false, status: "error", error: "Organization setup could not be started. Try again later." };
   }
 }

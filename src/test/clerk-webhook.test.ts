@@ -13,16 +13,21 @@ function db(overrides: Record<string, unknown> = {}): IdentityWebhookDb {
   const userRecord = { id: "u", tenantIsolationLockedAt: null as Date | null, clerkDeletedAt: null as Date | null };
   let membershipRecord: { organizationId: string; clerkMembershipId: string; clerkDeletedAt: Date | null; role: string | null; roleSyncStatus: string; clerkRoleUpdatedAt: Date | null } | null = null;
   const value = {
-    user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u", tenantIsolationLockedAt: null }), update: vi.fn() },
+    user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u", tenantIsolationLockedAt: null, clerkDeletedAt: null, membership: null, organizationProvisioning: null }), update: vi.fn(), updateMany: vi.fn() },
     organization: { upsert: vi.fn().mockResolvedValue({ id: "o" }), findUnique: vi.fn().mockResolvedValue({ id: "o" }), update: vi.fn() },
     membership: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
     organizationProvisioning: { findUnique: vi.fn().mockResolvedValue({ status: "PENDING", clerkOrgId: "org_1" }), update: vi.fn(), upsert: vi.fn() },
+    userDeletionFence: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn(), update: vi.fn() },
     $transaction: vi.fn(),
     ...overrides,
   };
   if (!overrides.user) {
     value.user.findUnique.mockImplementation(async () => userRecord);
-    value.user.update.mockImplementation(async ({ data }: { data: Partial<typeof userRecord> }) => Object.assign(userRecord, data));
+     value.user.update.mockImplementation(async ({ data }: { data: Partial<typeof userRecord> }) => Object.assign(userRecord, data));
+     value.user.updateMany.mockImplementation(async ({ data }: { data: Partial<typeof userRecord> }) => {
+       if (!userRecord.clerkDeletedAt || userRecord.clerkDeletedAt < (data.clerkDeletedAt as Date)) Object.assign(userRecord, data);
+       return { count: 1 };
+     });
   }
   if (!overrides.membership) {
     value.membership.findUnique.mockImplementation(async () => membershipRecord);
@@ -45,6 +50,56 @@ describe("permanent work identity webhook policy", () => {
     expect(parseClerkWebhook(event("session.created", {}))).toBeNull();
   });
 
+  it("creates a pre-binding claim in the same transaction as a new User projection", async () => {
+    const value = db({ user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue(null), update: vi.fn(), updateMany: vi.fn() } });
+    await processClerkWebhook(value, event("user.created", user));
+
+    expect(value.$transaction).toHaveBeenCalled();
+    expect(value.user.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        clerkUserId: "user_1",
+        organizationProvisioning: { create: { status: "PRE_BINDING" } },
+      }),
+    }));
+  });
+
+  it("persists a deletion fence before a missing User projection can be recreated", async () => {
+    let fenced = false;
+    const value = db({
+      user: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+      userDeletionFence: { findUnique: vi.fn(async () => fenced ? { id: "fence" } : null), create: vi.fn(async () => { fenced = true; }), update: vi.fn() },
+    });
+
+    await processClerkWebhook(value, event("user.deleted", { id: "user_1", deleted_at: "2026-08-20T12:00:00.000Z" }));
+    expect(value.userDeletionFence.create).toHaveBeenCalledWith({ data: { clerkUserId: "user_1", deletedAt: new Date("2026-08-20T12:00:00.000Z") } });
+    await processClerkWebhook(value, event("user.created", user));
+    expect(value.user.upsert).not.toHaveBeenCalled();
+  });
+
+  it("claims an existing never-bound user only when it is safe", async () => {
+    const value = db({
+      user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u", clerkDeletedAt: null, tenantIsolationLockedAt: null, membership: null, organizationProvisioning: null }), update: vi.fn(), updateMany: vi.fn() },
+      organizationProvisioning: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
+    });
+    await processClerkWebhook(value, event("user.updated", user));
+    expect(value.organizationProvisioning.create).toHaveBeenCalledWith({ data: { userId: "u", status: "PRE_BINDING" } });
+  });
+
+  it("does not claim a bound, revoked, or locked existing user", async () => {
+    for (const state of [
+      { clerkDeletedAt: new Date(), tenantIsolationLockedAt: null, membership: null },
+      { clerkDeletedAt: null, tenantIsolationLockedAt: new Date(), membership: null },
+      { clerkDeletedAt: null, tenantIsolationLockedAt: null, membership: { id: "membership" } },
+    ]) {
+      const value = db({
+        user: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "u", ...state, organizationProvisioning: null }), update: vi.fn(), updateMany: vi.fn() },
+        organizationProvisioning: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
+      });
+      await processClerkWebhook(value, event("user.updated", user));
+      expect(value.organizationProvisioning.create).not.toHaveBeenCalled();
+    }
+  });
+
   it("creates the first membership only when the durable claim matches", async () => {
     const value = db();
     await processClerkWebhook(value, event("organizationMembership.created", membership));
@@ -57,6 +112,62 @@ describe("permanent work identity webhook policy", () => {
     await expect(processClerkWebhook(value, event("organizationMembership.created", membership))).resolves.toEqual({ status: "conflict", code: "UNCLAIMED_MEMBERSHIP" });
     expect(value.user.update).toHaveBeenCalledWith({ where: { id: "u" }, data: { tenantIsolationLockedAt: expect.any(Date) } });
     expect(value.membership.create).not.toHaveBeenCalled();
+  });
+
+  it("binds an organization only when its private metadata names the pending claim", async () => {
+    const value = db({
+      organizationProvisioning: {
+        findUnique: vi.fn().mockResolvedValue({ id: "claim-1", userId: "u", status: "PENDING", clerkOrgId: null }),
+        updateMany: vi.fn(),
+        update: vi.fn(),
+        upsert: vi.fn(),
+      },
+    });
+
+    await processClerkWebhook(value, event("organization.created", {
+      ...organization,
+      private_metadata: { grantflowOnboardingClaimId: "claim-1" },
+    }));
+
+    expect(value.organizationProvisioning.updateMany).toHaveBeenCalledWith({
+      where: { id: "claim-1", status: "PENDING", clerkOrgId: null },
+      data: { clerkOrgId: "org_1" },
+    });
+    expect(value.organization.update).toHaveBeenCalledWith({ where: { id: "o" }, data: { creatorId: "u" } });
+  });
+
+  it("binds valid correlated organization and membership events after an ambiguous create", async () => {
+    const value = db({
+      organizationProvisioning: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce({ id: "claim-1", userId: "u", status: "PENDING", clerkOrgId: null })
+          .mockResolvedValue({ id: "claim-1", userId: "u", status: "PENDING", clerkOrgId: "org_1" }),
+        updateMany: vi.fn(),
+        update: vi.fn(),
+        upsert: vi.fn(),
+      },
+    });
+
+    await processClerkWebhook(value, event("organization.created", { ...organization, private_metadata: { grantflowOnboardingClaimId: "claim-1" } }));
+    await processClerkWebhook(value, event("organizationMembership.created", membership));
+
+    expect(value.membership.create).toHaveBeenCalledWith({ data: expect.objectContaining({ clerkMembershipId: "mem_1", organizationId: "o" }) });
+  });
+
+  it("does not correlate an organization through creator email or missing private metadata", async () => {
+    const value = db({
+      organizationProvisioning: {
+        findUnique: vi.fn(),
+        updateMany: vi.fn(),
+        update: vi.fn(),
+        upsert: vi.fn(),
+      },
+    });
+
+    await processClerkWebhook(value, event("organization.created", organization));
+
+    expect(value.organizationProvisioning.findUnique).not.toHaveBeenCalled();
+    expect(value.organization.update).not.toHaveBeenCalled();
   });
 
   it("locks every second or replacement membership without changing the binding", async () => {
@@ -114,11 +225,11 @@ describe("permanent work identity webhook policy", () => {
     await processClerkWebhook(value, event("user.deleted", { ...deletion, deleted_at: "2026-08-19T12:00:00.000Z" }));
     await processClerkWebhook(value, event("user.deleted", { ...deletion, deleted_at: "2026-08-21T12:00:00.000Z" }));
 
-    expect(value.user.update).toHaveBeenCalledTimes(2);
-    expect(value.user.update).toHaveBeenLastCalledWith({
-      where: { clerkUserId: "user_1" },
-      data: { clerkDeletedAt: new Date("2026-08-21T12:00:00.000Z") },
-    });
+     expect(value.user.updateMany).toHaveBeenCalledTimes(4);
+     expect(value.user.updateMany).toHaveBeenLastCalledWith({
+       where: { clerkUserId: "user_1", OR: [{ clerkDeletedAt: null }, { clerkDeletedAt: { lt: new Date("2026-08-21T12:00:00.000Z") } }] },
+       data: { clerkDeletedAt: new Date("2026-08-21T12:00:00.000Z") },
+     });
   });
 
   it("persists an unknown role as a diagnostic denial, never as VIEWER or the prior role", async () => {
