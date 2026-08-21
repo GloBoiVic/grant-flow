@@ -1,3 +1,3 @@
 # Architecture
 
-Status: No active architecture.
+Status: No active architecture work.

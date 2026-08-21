@@ -64,3 +64,13 @@ Final review corrections:
 - Prisma Compute deployed to project `proj_cmsmocbqt146x1adx4q0g77lq`, app `grant-flow`, region `us-east-1`, branch `main`, primary database, production environment — live URL: `https://o1bvekcp5ukh8dg9pnbwd0by.ewr.prisma.build`.
 - No credentials or `DATABASE_URL` were persisted in any tracked file. Secrets remain in local `.env` (gitignored).
 - Process gate I2 (document the cross-entity org integrity gap in `DECISIONS.md`) is now closed via the `2026-08-13` decision in `dispatch/DECISIONS.md`. Gate I1 (commit all files) is satisfied by the `0402ada` commit. See that decision record for details.
+
+## GF-GRANT-002 — Grant List and Portfolio Navigation
+
+- Implemented the `/grants` portfolio browser: organization-scoped title/funder search; multi-status and multi-tag filtering; URL-backed state; sortable relevant columns; fixed 50-row offset pagination; active-filter controls; distinct initial-empty and no-match states; and preserved create/detail Sheet behavior.
+- Architect-approved pagination decision: use a fixed-size offset live view, accepting that concurrent changes can shift rows between page requests. No snapshot, totals/count query, configurable page size, or page-number jumping was added.
+- Later screenshot-aligned UX correction: move scoped search into the `/grants` top-navigation slot and replace exposed controls with progressive inline filtering (`Add filter`, removable active chips, and `Clear all`). Search remains `/grants`-only and the existing URL/query/Sheet contracts remain intact.
+- Review outcomes: R3 **PASS** and UX R1 **PASS**, with no Critical or Important findings. Minor non-blocking caveats are the accepted live-view shifts, existing owner-display limitations, and deferred totals/snapshot/configurable pagination and adjacent scope.
+- Validation evidence: full Vitest **157 passed / 28 skipped**; disposable PostgreSQL **20 passed**; ESLint, TypeScript, production build, and `git diff --check` passed. No schema, migration, dependency, or application-code changes were made during this documentation closure.
+- No one-off reports were deleted; no reports were inventoried for deletion because none required cleanup beyond the flat dispatch files.
+- Completion receipt: `memory.md` was saved and the write was verified successfully. No commit, push, merge, deployment, or other Git-state change was performed.

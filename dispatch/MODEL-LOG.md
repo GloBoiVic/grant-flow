@@ -1,4 +1,3 @@
 # Model Usage Log
 
-| Date | Task | Agent | Model | Outcome |
-|---|---|---|---|---|
+Status: No active model log.

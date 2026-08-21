@@ -1,18 +1,12 @@
 import "server-only";
 
 import { requireAuthorization } from "@/lib/clerk/authorization";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { serializeActivity, serializeDate, serializeTag } from "@/lib/queries/serializers";
 import { GrantStatus, type GrantStatus as GrantStatusValue } from "@/lib/validations/grant";
+import { GRANT_LIST_PAGE_SIZE, type GrantListQueryOptions, type GrantSortDirection, toPrismaStatuses } from "@/lib/queries/grant-list-contract";
 import type { GrantDetailDto, GrantListDto } from "@/types/grant";
-
-export interface ListGrantsOptions {
-  cursor?: string;
-  limit?: number;
-}
-
-const DEFAULT_GRANT_LIMIT = 25;
-const MAX_GRANT_LIMIT = 100;
 
 const grantFields = {
   id: true,
@@ -38,11 +32,6 @@ const grantFields = {
 const funderFields = { id: true, name: true, type: true, website: true, createdAt: true, updatedAt: true } as const;
 
 const activityFields = { id: true, action: true, description: true, metadata: true, actorId: true, createdAt: true } as const;
-
-function boundedLimit(limit: number | undefined): number {
-  if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_GRANT_LIMIT;
-  return Math.min(Math.max(Math.trunc(limit), 1), MAX_GRANT_LIMIT);
-}
 
 function serializeStatus(status: string): GrantStatusValue {
   return status === "InternalReview" ? GrantStatus.InternalReview : status as GrantStatusValue;
@@ -102,23 +91,49 @@ function assignedTags(organizationId: string) {
   } as const;
 }
 
-export async function listGrants(options: ListGrantsOptions = {}): Promise<GrantListDto> {
+const defaultListOptions: GrantListQueryOptions = {
+  statuses: [],
+  tagIds: [],
+  sort: "deadline",
+  direction: "asc",
+  page: 1,
+};
+
+export async function listGrants(options: GrantListQueryOptions = defaultListOptions): Promise<GrantListDto> {
   const authorization = await requireAuthorization();
-  const limit = boundedLimit(options.limit);
+  const direction: GrantSortDirection = options.direction;
+  const search = options.q ? { contains: options.q, mode: "insensitive" as const } : undefined;
+  const tagFilter = options.tagIds.length > 0 ? {
+    some: { tagId: { in: options.tagIds }, tag: { organizationId: authorization.organizationId, deletedAt: null } },
+  } : undefined;
+  const orderBy: Prisma.GrantOrderByWithRelationInput[] = options.sort === "funder"
+    ? [{ funder: { name: direction } }, { id: direction }]
+    : options.sort === "title"
+      ? [{ title: direction }, { id: direction }]
+      : options.sort === "status"
+        ? [{ status: direction }, { id: direction }]
+        : options.sort === "requested"
+          ? [{ amountRequested: { sort: direction, nulls: "last" as const } }, { id: direction }]
+          : options.sort === "awarded"
+            ? [{ amountAwarded: { sort: direction, nulls: "last" as const } }, { id: direction }]
+            : [{ deadline: { sort: direction, nulls: "last" as const } }, { id: direction }];
   const grants = await prisma.grant.findMany({
     where: {
       organizationId: authorization.organizationId,
       deletedAt: null,
       funder: { organizationId: authorization.organizationId, deletedAt: null },
+      ...(search ? { OR: [{ title: search }, { funder: { name: search, organizationId: authorization.organizationId, deletedAt: null } }] } : {}),
+      ...(options.statuses.length > 0 ? { status: { in: toPrismaStatuses(options.statuses) } } : {}),
+      ...(tagFilter ? { grantTags: tagFilter } : {}),
     },
     select: { ...grantFields, funder: { select: { id: true, name: true, type: true } }, grantTags: assignedTags(authorization.organizationId) },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
-    take: limit + 1,
+    orderBy,
+    skip: (options.page - 1) * GRANT_LIST_PAGE_SIZE,
+    take: GRANT_LIST_PAGE_SIZE + 1,
   });
-  const hasNextPage = grants.length > limit;
-  const items = (hasNextPage ? grants.slice(0, limit) : grants).map((grant) => ({ ...serializeGrant(grant), funder: grant.funder }));
-  return { items, nextCursor: hasNextPage ? items[items.length - 1]?.id ?? null : null };
+  const hasNextPage = grants.length > GRANT_LIST_PAGE_SIZE;
+  const items = (hasNextPage ? grants.slice(0, GRANT_LIST_PAGE_SIZE) : grants).map((grant) => ({ ...serializeGrant(grant), funder: grant.funder }));
+  return { items, page: options.page, hasNextPage, hasPreviousPage: options.page > 1 };
 }
 
 export async function getGrant(grantId: string): Promise<GrantDetailDto | null> {

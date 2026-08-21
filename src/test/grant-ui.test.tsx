@@ -3,14 +3,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createGrantMock, editGrantMock, changeStatusMock, assignTagMock, createTagMock, removeTagMock, pushMock, replaceMock } = vi.hoisted(() => ({ createGrantMock: vi.fn(), editGrantMock: vi.fn(), changeStatusMock: vi.fn(), assignTagMock: vi.fn(), createTagMock: vi.fn(), removeTagMock: vi.fn(), pushMock: vi.fn(), replaceMock: vi.fn() }));
+const { createGrantMock, editGrantMock, changeStatusMock, assignTagMock, createTagMock, removeTagMock, pushMock, replaceMock, pathnameMock } = vi.hoisted(() => ({ createGrantMock: vi.fn(), editGrantMock: vi.fn(), changeStatusMock: vi.fn(), assignTagMock: vi.fn(), createTagMock: vi.fn(), removeTagMock: vi.fn(), pushMock: vi.fn(), replaceMock: vi.fn(), pathnameMock: vi.fn(() => "/grants") }));
 vi.mock("@/app/(authenticated)/(org-required)/grants/actions", () => ({ createGrant: createGrantMock, editGrant: editGrantMock, changeGrantStatus: changeStatusMock }));
 vi.mock("@/app/(authenticated)/(org-required)/grants/tag-actions", () => ({ assignTagToGrant: assignTagMock, createTag: createTagMock, removeTagFromGrant: removeTagMock }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, replace: replaceMock, refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, replace: replaceMock, refresh: vi.fn() }), usePathname: pathnameMock, useSearchParams: () => new URLSearchParams(window.location.search) }));
+vi.mock("@/components/layout/account-menu", () => ({ AccountMenu: () => null }));
+vi.mock("@/components/layout/mobile-navigation", () => ({ MobileNavigation: () => null }));
 
 import { GrantDetailSheet } from "@/components/grants/grant-detail-sheet";
 import { GrantsPage } from "@/components/grants/grants-page";
 import { GrantForm } from "@/components/grants/grant-form";
+import { TopNavigation } from "@/components/layout/top-navigation";
 import type { FunderDto } from "@/types/funder";
 import type { GrantDetailDto } from "@/types/grant";
 import type { TagDto } from "@/types/tag";
@@ -65,16 +68,16 @@ describe("grant UI states", () => {
   });
 
   it("keeps the list preview bounded while exposing the complete tag summary", () => {
-    render(<GrantsPage grants={{ items: [{ ...grant, tags: [...tags, { id: "tag-3", name: "Rural Development" }], funder }], nextCursor: null }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} cursor={null} />);
+    render(<GrantsPage grants={{ items: [{ ...grant, tags: [...tags, { id: "tag-3", name: "Rural Development" }], funder }], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} />);
     expect(screen.getByLabelText("Tags: Housing, Youth Services, Rural Development")).toBeInTheDocument();
     expect(screen.getByText("+1 more")).toBeInTheDocument();
   });
 
   it("opens the detail Sheet from the whole row while preserving child controls and pagination", async () => {
     const user = userEvent.setup();
-    render(<GrantsPage grants={{ items: [{ ...grant, funder }], nextCursor: "next-page" }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} cursor="current-page" />);
+    render(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 1, hasNextPage: true, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="" />);
     const row = screen.getByRole("row", { name: "Open Housing Stability Pilot" });
-    const expectedUrl = "/grants?grant=grant-1&cursor=current-page";
+    const expectedUrl = "/grants?grant=grant-1";
 
     await user.click(screen.getByText("North Star Foundation"));
     expect(pushMock).toHaveBeenCalledWith(expectedUrl);
@@ -94,8 +97,53 @@ describe("grant UI states", () => {
     expect(pushMock).toHaveBeenCalledWith(expectedUrl);
 
     pushMock.mockClear();
-    await user.click(screen.getByRole("button", { name: "Next page" }));
-    expect(pushMock).toHaveBeenCalledWith("/grants?cursor=next-page");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(pushMock).toHaveBeenCalledWith("/grants?page=2");
+  });
+
+  it("toggles the default deadline sort and omits default URL values", async () => {
+    const user = userEvent.setup();
+    const view = render(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="" />);
+    await user.click(screen.getByRole("button", { name: "Sort by Due, currently ascending" }));
+    expect(pushMock).toHaveBeenCalledWith("/grants?dir=desc");
+    pushMock.mockClear();
+    view.rerender(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="dir=desc" />);
+    await user.click(screen.getByRole("button", { name: "Sort by Due, currently descending" }));
+    expect(pushMock).toHaveBeenCalledWith("/grants");
+  });
+
+  it("reveals progressive status and tag filters and preserves multi-select URL state", async () => {
+    const user = userEvent.setup();
+    render(<GrantsPage grants={{ items: [], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="status=Research&tag=tag-1" />);
+    expect(screen.queryByRole("checkbox", { name: "Internal Review" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add filter" }));
+    expect(screen.getByText("Internal Review")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Research" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Housing" })).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Awarded" }));
+    expect(pushMock).toHaveBeenCalledWith("/grants?tag=tag-1&status=Research&status=Awarded");
+  });
+
+  it("shows the scoped search only in the grants top navigation and preserves sheet state", async () => {
+    pathnameMock.mockReturnValue("/grants");
+    window.history.replaceState({}, "", "/grants?grant=grant-1&create=1&page=2");
+    const identity = { organizationName: "North Star", userName: "Mira", userEmail: "mira@example.com", userInitials: "MH", userAvatarUrl: null };
+    const { rerender } = render(<TopNavigation identity={identity} sidebarCollapsed={false} />);
+    expect(screen.getByRole("textbox", { name: "Search grants or funders" })).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox", { name: "Search grants or funders" }), "Housing");
+    await user.keyboard("{Enter}");
+    expect(pushMock).toHaveBeenCalledWith("/grants?grant=grant-1&create=1&q=Housing");
+    pathnameMock.mockReturnValue("/dashboard");
+    rerender(<TopNavigation identity={identity} sidebarCollapsed={false} />);
+    expect(screen.queryByRole("textbox", { name: "Search grants or funders" })).not.toBeInTheDocument();
+  });
+
+  it("preserves list URL state while opening and closing the grant Sheet", async () => {
+    const user = userEvent.setup();
+    render(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 2, hasNextPage: true, hasPreviousPage: true }} funders={[funder]} selectedGrant={grant} tags={tags} createOpen={false} listQuery="q=Housing&status=Research&tag=tag-1&sort=funder&dir=desc&page=2" />);
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(replaceMock).toHaveBeenCalledWith("/grants?q=Housing&status=Research&tag=tag-1&sort=funder&dir=desc&page=2");
   });
 
   it("protects dirty create forms from dismissal and preserves server errors", async () => {

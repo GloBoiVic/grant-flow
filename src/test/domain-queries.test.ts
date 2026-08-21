@@ -43,19 +43,65 @@ describe("organization-scoped domain queries", () => {
     }));
   });
 
-  it("scopes grant listing and uses cursor pagination", async () => {
-    await listGrants({ cursor: "grant-cursor", limit: 10 });
+  it("scopes grant listing and uses fixed offset pagination", async () => {
+    await listGrants({ statuses: [], tagIds: [], sort: "deadline", direction: "asc", page: 2 });
     expect(mocks.grantFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         organizationId: "local-org",
         deletedAt: null,
         funder: { organizationId: "local-org", deletedAt: null },
       }),
-      take: 11,
-      cursor: { id: "grant-cursor" },
-      skip: 1,
+      take: 51,
+      skip: 50,
+      orderBy: [{ deadline: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       select: expect.objectContaining({ grantTags: expect.objectContaining({ where: { tag: { organizationId: "local-org", deletedAt: null } } }) }),
     }));
+  });
+
+  it.each([
+    ["title", "asc", [{ title: "asc" }, { id: "asc" }]],
+    ["title", "desc", [{ title: "desc" }, { id: "desc" }]],
+    ["funder", "asc", [{ funder: { name: "asc" } }, { id: "asc" }]],
+    ["funder", "desc", [{ funder: { name: "desc" } }, { id: "desc" }]],
+    ["status", "asc", [{ status: "asc" }, { id: "asc" }]],
+    ["status", "desc", [{ status: "desc" }, { id: "desc" }]],
+    ["deadline", "asc", [{ deadline: { sort: "asc", nulls: "last" } }, { id: "asc" }]],
+    ["deadline", "desc", [{ deadline: { sort: "desc", nulls: "last" } }, { id: "desc" }]],
+    ["requested", "asc", [{ amountRequested: { sort: "asc", nulls: "last" } }, { id: "asc" }]],
+    ["requested", "desc", [{ amountRequested: { sort: "desc", nulls: "last" } }, { id: "desc" }]],
+    ["awarded", "asc", [{ amountAwarded: { sort: "asc", nulls: "last" } }, { id: "asc" }]],
+    ["awarded", "desc", [{ amountAwarded: { sort: "desc", nulls: "last" } }, { id: "desc" }]],
+  ] as const)("uses null-last stable ordering for %s %s", async (sort, direction, orderBy) => {
+    await listGrants({ statuses: [], tagIds: [], sort, direction, page: 1 });
+    expect(mocks.grantFindMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy }));
+  });
+
+  it("filters grants by any selected tag and keeps the tag relation organization-scoped", async () => {
+    await listGrants({ statuses: [], tagIds: ["tag-a", "tag-b"], sort: "title", direction: "asc", page: 1 });
+    expect(mocks.grantFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        grantTags: { some: { tagId: { in: ["tag-a", "tag-b"] }, tag: { organizationId: "local-org", deletedAt: null } } },
+      }),
+    }));
+  });
+
+  it("uses a 51-row boundary to determine the next page and returns exactly 50 rows", async () => {
+    const row = {
+      id: "grant-id", funderId: "funder-1", title: "Grant", status: "Research", currency: "USD",
+      amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null,
+      designation: null, countyServed: null, nextSteps: null, notes: null, ownerId: null, createdById: "user-1",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z"),
+      funder: { id: "funder-1", name: "Funder", type: "FOUNDATION" }, grantTags: [],
+    };
+    mocks.grantFindMany.mockResolvedValue(Array.from({ length: 51 }, (_, index) => ({ ...row, id: `grant-${index}` })));
+    await expect(listGrants({ statuses: [], tagIds: [], sort: "title", direction: "desc", page: 2 })).resolves.toMatchObject({ page: 2, hasNextPage: true, hasPreviousPage: true, items: { length: 50 } });
+    expect(mocks.grantFindMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 50, take: 51, orderBy: [{ title: "desc" }, { id: "desc" }] }));
+  });
+
+  it("treats each request as a live view rather than a cross-request snapshot", async () => {
+    await listGrants({ statuses: [], tagIds: [], sort: "deadline", direction: "asc", page: 1 });
+    await listGrants({ statuses: [], tagIds: [], sort: "deadline", direction: "asc", page: 1 });
+    expect(mocks.grantFindMany).toHaveBeenCalledTimes(2);
   });
 
   it("lists only active tags for the authorized organization", async () => {
@@ -77,7 +123,7 @@ describe("organization-scoped domain queries", () => {
       grantTags: [{ tag: { id: "tag-1", name: "Housing" } }],
     }]);
 
-    await expect(listGrants()).resolves.toMatchObject({ items: [{ tags: [{ id: "tag-1", name: "Housing" }] }] });
+    await expect(listGrants()).resolves.toMatchObject({ items: [{ tags: [{ id: "tag-1", name: "Housing" }] }], page: 1 });
   });
 
   it("returns unavailable grants as missing", async () => {

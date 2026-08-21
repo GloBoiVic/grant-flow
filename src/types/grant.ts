@@ -45,7 +45,9 @@ export interface GrantDetailDto extends GrantDto {
 
 export interface GrantListDto {
   items: GrantListItemDto[];
-  nextCursor: string | null;
+  page: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
 }
 
 export type CreateGrantResult = ActionResult<GrantDetailDto>;

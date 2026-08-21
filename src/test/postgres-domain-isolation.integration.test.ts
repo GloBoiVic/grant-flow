@@ -207,6 +207,20 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
     expect(ids).not.toContain(grantASoftDeletedId);
   });
 
+  it("applies server-side search and status filters within the organization", async () => {
+    setSession("user_aaaa", "org_aaaa", "org:member");
+    const result = await grantQueries!.listGrants({
+      q: "status",
+      statuses: ["Qualified"],
+      tagIds: [],
+      sort: "title",
+      direction: "asc",
+      page: 1,
+    });
+    expect(result.items.map((grant) => grant.id)).toEqual([grantAStatusId]);
+    expect(result.hasPreviousPage).toBe(false);
+  });
+
   it("returns another organization's grant and a soft-deleted grant as missing on read", async () => {
     setSession("user_aaaa", "org_aaaa", "org:member");
     expect(await grantQueries!.getGrant(grantBId)).toBeNull();
