@@ -7,6 +7,7 @@ export default function LoginPage(): React.ReactNode {
         path="/login"
         routing="path"
         signUpUrl="/sign-up"
+        fallbackRedirectUrl="/"
         appearance={{
           variables: {
             colorPrimary: "var(--primary)",

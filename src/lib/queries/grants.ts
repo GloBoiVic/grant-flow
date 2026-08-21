@@ -2,7 +2,7 @@ import "server-only";
 
 import { requireAuthorization } from "@/lib/clerk/authorization";
 import { prisma } from "@/lib/prisma";
-import { serializeActivity, serializeDate } from "@/lib/queries/serializers";
+import { serializeActivity, serializeDate, serializeTag } from "@/lib/queries/serializers";
 import { GrantStatus, type GrantStatus as GrantStatusValue } from "@/lib/validations/grant";
 import type { GrantDetailDto, GrantListDto } from "@/types/grant";
 
@@ -69,6 +69,7 @@ function serializeGrant(grant: {
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
+  grantTags: Array<{ tag: { id: string; name: string } }>;
 }): GrantBaseDto {
   return {
     id: grant.id,
@@ -89,7 +90,16 @@ function serializeGrant(grant: {
     createdById: grant.createdById,
     createdAt: grant.createdAt.toISOString(),
     updatedAt: grant.updatedAt.toISOString(),
+    tags: grant.grantTags.map(({ tag }) => serializeTag(tag)),
   };
+}
+
+function assignedTags(organizationId: string) {
+  return {
+    where: { tag: { organizationId, deletedAt: null } },
+    select: { tag: { select: { id: true, name: true } } },
+    orderBy: { tag: { name: "asc" as const } },
+  } as const;
 }
 
 export async function listGrants(options: ListGrantsOptions = {}): Promise<GrantListDto> {
@@ -101,7 +111,7 @@ export async function listGrants(options: ListGrantsOptions = {}): Promise<Grant
       deletedAt: null,
       funder: { organizationId: authorization.organizationId, deletedAt: null },
     },
-    select: { ...grantFields, funder: { select: { id: true, name: true, type: true } } },
+    select: { ...grantFields, funder: { select: { id: true, name: true, type: true } }, grantTags: assignedTags(authorization.organizationId) },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
     take: limit + 1,
@@ -123,7 +133,8 @@ export async function getGrant(grantId: string): Promise<GrantDetailDto | null> 
     select: {
       ...grantFields,
       funder: { select: funderFields },
-      activities: {
+       grantTags: assignedTags(authorization.organizationId),
+       activities: {
         where: { organizationId: authorization.organizationId },
         select: activityFields,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],

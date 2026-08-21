@@ -213,10 +213,11 @@ Flat, organization-scoped, user-created, reusable label. Many-to-many with grant
 | `id` | UUID (PK) | |
 | `organizationId` | UUID (FK → Organization) | Tenant scope. |
 | `name` | `text` | Display name (e.g., "Housing"). |
+| `normalizedName` | `text` | Server-owned trimmed/lowercased name used for case-insensitive uniqueness within the organization; required by the implemented migration. |
 | `color` | `text?` | Hex color for UI badge. |
 | `createdAt` | `timestamptz` | |
 
-**Unique:** `(organizationId, name)`.
+**Implemented unique constraint:** `(organizationId, normalizedName)` replaces the former case-sensitive `(organizationId, name)` constraint. The implemented Prisma migration backfills existing rows using the agreed trim/lower rule, rejects normalized-name collisions without silent merge or history changes, and makes `normalizedName` required.
 
 ### Entity: GrantTag
 
@@ -452,12 +453,17 @@ Activities are fetched in reverse chronological order, scoped by `organizationId
 
 - **Flat** — no hierarchy, nesting, or parent-child relationships.
 - **Organization-scoped** — tags are not shared across organizations.
-- **User-created** — the system does not seed or prescribe tags. Users create, rename, delete, and assign them.
+- **User-created** — the system does not seed or prescribe tags. Members and admins manage tags and assignments; rename and delete/restore remain deferred.
 - **Reusable** — many-to-many with grants via `GrantTag` join table.
 - **Optional** — a grant may have zero tags.
 - **Color field reserved** — the `color` field exists in the schema but is not required in MVP. Color badge rendering is a later addition.
-- **Unique per org** — tag names are unique within an org: unique constraint `(organizationId, name)`.
+- **Unique per org** — `normalizedName` is derived by trimming and lowercasing `name`; the implemented database constraint `(organizationId, normalizedName)` enforces case-insensitive uniqueness. Internal whitespace is not collapsed and display casing is preserved in `name`.
+- **Soft-deleted names remain reserved** — the full-row uniqueness policy applies to active and soft-deleted tags. Reuse-after-delete remains deferred.
+- **Assignment semantics** — assignment and removal are idempotent. `GrantTag` remains the composite-primary-key join table, with no separate `organizationId`; active same-organization boundaries are enforced by the application.
+- **Activity semantics** — tag creation, assignment, and removal do not create Activity entries.
+- **Migration status** — the normalized key and constraint are implemented. Existing normalized-name collisions fail migration clearly without silently merging records or associations.
 - **No bounded list** — tags are free-form. Users type any name. A bounded-list admin mode is post-MVP.
+- **Deferred behavior** — tag filtering/search, rename, delete/restore, colors, hierarchy/groups, standalone tag management, bulk operations, import, analytics/reporting, suggestions/automation, funder-detail display, full grant-detail routing, and tag Activity remain deferred.
 
 ---
 
@@ -471,7 +477,7 @@ Activities are fetched in reverse chronological order, scoped by `organizationId
 | Organization | `clerkOrgId` unique | Clerk identity lookup |
 | User | `email` unique | Single account per email |
 | User | `clerkUserId` unique | Clerk identity lookup |
-| Tag | `(organizationId, name)` unique | No duplicate tag names within org |
+| Tag | `(organizationId, normalizedName)` unique | No duplicate trimmed/lowercased tag names within org; soft-deleted names remain reserved |
 | GrantTag | `(grantId, tagId)` unique (PK) | No duplicate tag assignments |
 
 ### Indexes (Recommended for MVP)
@@ -677,4 +683,4 @@ Donor CRM, accounting, billing/subscription, AI features, event sourcing/CQRS, m
 
 ---
 
-*End of document. This document combines the implemented Prisma/Clerk foundation with the planned GrantFlow domain model. Final R2 review remains open; terminal GF-AUTH-001 completion is not claimed.*
+*End of document. This document combines the implemented Prisma/Clerk foundation with the planned GrantFlow domain model. GF-DATA-001 and the related GF-AUTH-001 organization-access foundation are complete; remaining domain persistence is planned.*

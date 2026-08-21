@@ -191,13 +191,14 @@ model Tag {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
   name           String
+  normalizedName String
   color          String?
   createdAt      DateTime     @default(now()) @db.Timestamptz
   deletedAt      DateTime?    @db.Timestamptz
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   grantTags      GrantTag[]
 
-  @@unique([organizationId, name])
+  @@unique([organizationId, normalizedName])
   @@index([organizationId])
 }
 

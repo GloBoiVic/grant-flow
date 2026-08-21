@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ActivityDto } from "@/types/grant";
+import type { TagDto } from "@/types/tag";
 
 export function serializeDate(value: Date | null): string | null {
   return value === null ? null : value.toISOString().slice(0, 10);
@@ -31,4 +32,8 @@ export function serializeActivity(activity: {
     actorId: activity.actorId,
     createdAt: serializeTimestamp(activity.createdAt),
   };
+}
+
+export function serializeTag(tag: { id: string; name: string }): TagDto {
+  return { id: tag.id, name: tag.name };
 }

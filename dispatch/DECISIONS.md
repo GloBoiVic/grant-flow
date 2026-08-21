@@ -27,3 +27,19 @@
 - GF-PHASE1-001 is approved with the explicit scope correction: standalone authentication audit and broader production hardening are deferred and do not gate this slice.
 - Retain only domain tenant-isolation/security verification as the relevant security requirement for Phase 1.
 - Blueprint and workflow approval is complete. Implementation remains pending only on the dedicated feature-branch `READY` receipt and the separately confirmed exact branch-creation command; no repository-changing Git action is authorized by this documentation update.
+
+## 2026-08-21 — GF-TAG-001 approved tag data-model decisions
+
+- `Tag.normalizedName` is server-owned, derived from the trimmed and lowercased display name, and will provide database-enforced case-insensitive uniqueness per organization.
+- The required migration must backfill `normalizedName`, detect and reject normalized-name collisions with actionable evidence, and never silently merge, delete, rename, or rewrite Tag/GrantTag history.
+- The full-row organization/name uniqueness policy remains in force for soft-deleted tags: their names remain reserved.
+- Members and admins may manage tags. Assignment and removal are idempotent; duplicate assignment and already-absent removal both succeed without an additional write.
+- Tag creation, assignment, and removal do not create Activity entries. Filtering and all stated GF-TAG-001 deferrals remain deferred to their approved future scope; no tag filtering or deferred tag-management behavior is implemented by this documentation update.
+
+## 2026-08-21 — Phase 0 documentation reconciliation authority
+
+- Repository and closure evidence treats GF-DATA-001, GF-AUTH-001, and GF-SHELL-001 as complete. Phase 0 completion does not imply that any Phase 1+ or other unbuilt product feature exists.
+- shadcn is initialized as an owned generated-component foundation, evidenced by `components.json` and the generated `Button`, `Badge`, `Sheet`, `DropdownMenu`, `Avatar`, and `Skeleton` files under `src/components/ui/`. It is not a runtime product feature and must not be described as an additional package-dependent capability.
+- The requested reconciliation was documentation-only. Under the explicit restart authorization, this record is the authoritative dispatch decision; application code, Git state, database, migrations, dependencies, environment, and documentation outside the listed file set were not modified.
+
+- This restart explicitly authorizes reconciliation of the listed project context files and `AGENTS.md`; no other files or repository state are in scope.

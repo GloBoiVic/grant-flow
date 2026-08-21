@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   grantFindMany: vi.fn(),
   grantFindFirst: vi.fn(),
   activityFindMany: vi.fn(),
+  tagFindMany: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -15,12 +16,14 @@ vi.mock("@/lib/prisma", () => ({
     funder: { findMany: mocks.funderFindMany },
     grant: { findMany: mocks.grantFindMany, findFirst: mocks.grantFindFirst },
     activity: { findMany: mocks.activityFindMany },
+    tag: { findMany: mocks.tagFindMany },
   },
 }));
 
 import { listActivities } from "@/lib/queries/activities";
 import { listFunders } from "@/lib/queries/funders";
 import { getGrant, listGrants } from "@/lib/queries/grants";
+import { listTags } from "@/lib/queries/tags";
 
 describe("organization-scoped domain queries", () => {
   beforeEach(() => {
@@ -30,6 +33,7 @@ describe("organization-scoped domain queries", () => {
     mocks.grantFindMany.mockResolvedValue([]);
     mocks.grantFindFirst.mockResolvedValue(null);
     mocks.activityFindMany.mockResolvedValue([]);
+    mocks.tagFindMany.mockResolvedValue([]);
   });
 
   it("scopes active funder listing to the authorized organization", async () => {
@@ -50,7 +54,30 @@ describe("organization-scoped domain queries", () => {
       take: 11,
       cursor: { id: "grant-cursor" },
       skip: 1,
+      select: expect.objectContaining({ grantTags: expect.objectContaining({ where: { tag: { organizationId: "local-org", deletedAt: null } } }) }),
     }));
+  });
+
+  it("lists only active tags for the authorized organization", async () => {
+    await listTags();
+    expect(mocks.tagFindMany).toHaveBeenCalledWith({
+      where: { organizationId: "local-org", deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    });
+  });
+
+  it("serializes active assigned tags without exposing join fields", async () => {
+    mocks.grantFindMany.mockResolvedValue([{
+      id: "grant-1", funderId: "funder-1", title: "Grant", status: "Research", currency: "USD",
+      amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null,
+      designation: null, countyServed: null, nextSteps: null, notes: null, ownerId: null, createdById: "user-1",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z"),
+      funder: { id: "funder-1", name: "Funder", type: "FOUNDATION" },
+      grantTags: [{ tag: { id: "tag-1", name: "Housing" } }],
+    }]);
+
+    await expect(listGrants()).resolves.toMatchObject({ items: [{ tags: [{ id: "tag-1", name: "Housing" }] }] });
   });
 
   it("returns unavailable grants as missing", async () => {

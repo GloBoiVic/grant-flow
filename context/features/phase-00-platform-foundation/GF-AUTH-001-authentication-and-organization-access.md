@@ -8,7 +8,7 @@
 |---|---|
 | **ID** | GF-AUTH-001 |
 | **Phase** | Phase 0 — Platform Foundation |
-| **Status** | In Progress — final R2 remediation |
+| **Status** | Complete |
 | **Product Goal** | Enable secure user authentication, organization membership, and role-based access control |
 | **MVP Classification** | Prerequisite — required by all authenticated features |
 | **Roadmap Link** | [Phase 0 — Platform Foundation](../../roadmap.md#5-phase-0-platform-foundation) |
@@ -126,16 +126,16 @@ Permission enforcement is server-side in every Server Action. Client-side UI hid
 
 ## 13. Acceptance Criteria
 
-- [ ] User can sign up, sign in, and sign out
-- [ ] Clerk middleware protects authenticated routes
-- [ ] Unauthenticated users are redirected to `/login`
-- [ ] Organization can be created during sign-up
-- [ ] First-organization onboarding is verified
-- [ ] Webhook handler processes the four supported events and syncs local projections
-- [ ] Server Components successfully call `auth()` and derive `orgId`
-- [ ] Server Actions enforce authorization and reject unauthorized mutations
-- [ ] Recognized Clerk `orgRole` values authorize the correct server-side capabilities
-- [ ] Organization ID is never accepted from client-provided data
+- [x] User can sign up, sign in, and sign out
+- [x] Clerk middleware protects authenticated routes
+- [x] Unauthenticated users are redirected to `/login`
+- [x] Organization can be created during sign-up
+- [x] First-organization onboarding is verified
+- [x] Webhook handler processes the four supported events and syncs local projections
+- [x] Server Components successfully call `auth()` and derive `orgId`
+- [x] Server Actions enforce authorization and reject unauthorized mutations
+- [x] Recognized Clerk `orgRole` values authorize the correct server-side capabilities
+- [x] Organization ID is never accepted from client-provided data
 
 ## 14. Dependencies
 

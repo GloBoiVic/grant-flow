@@ -42,7 +42,7 @@ GrantFlow is a **Next.js modular monolith** — a single Next.js application dep
 
 ### Confirmed Clerk-first organization access boundary
 
-Clerk is the authentication, active-organization, and role authority. Protected requests use the signed Clerk session `userId`, active `orgId`, and recognized `orgRole`; normal requests do not perform a Clerk Backend lookup. Local `User` and `Organization` rows are webhook-maintained projections and domain references, not authorization state. Exactly four projection webhooks are supported: `user.created`, `user.updated`, `organization.created`, and `organization.updated`. Unsupported membership/deletion events no-op. The simplified persistence path has two clean migrations, including the onboarding claim create lease. Final R2 review remains open; terminal GF-AUTH-001 completion is not claimed.
+Clerk is the authentication, active-organization, and role authority. Protected requests use the signed Clerk session `userId`, active `orgId`, and recognized `orgRole`; normal requests do not perform a Clerk Backend lookup. Local `User` and `Organization` rows are webhook-maintained projections and domain references, not authorization state. Exactly four projection webhooks are supported: `user.created`, `user.updated`, `organization.created`, and `organization.updated`. Unsupported membership/deletion events no-op. The simplified persistence path has two clean migrations, including the onboarding claim create lease. GF-AUTH-001, GF-SHELL-001, and GF-DATA-001 are complete for the Phase 0 foundation.
 
 **Key structural choices:**
 
@@ -334,7 +334,7 @@ Each feature directory contains: `page.tsx` (Server Component), `actions.ts` (Se
 ```
 src/
 ├── components/
-│   ├── ui/             # shadcn/ui primitives (once initialized)
+│   ├── ui/             # owned generated shadcn/ui primitives
 │   ├── layout/         # Sidebar, topnav, app shell
 │   └── shared/         # StatusBadge, DeadlineChip, MetricCard, etc.
 ├── hooks/              # use-media-query, etc.
@@ -651,8 +651,6 @@ The following are **discouraged** unless a measured, documented requirement just
 | Collapsed sidebar width | `context/design.md` | Sidebar implementation |
 | Chart library | `context/design.md` | Dashboard chart implementation |
 | Responsive breakpoints | `context/design.md` | Responsive shell implementation |
-| shadcn/ui initialization reconciliation | `context/design.md` | First UI component implementation |
-| Icon convention (lucide-react) | `context/design.md` | shadcn initialization |
 
 ---
 

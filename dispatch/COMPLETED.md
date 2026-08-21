@@ -12,6 +12,24 @@
 - Prisma state recorded without identifiers or secrets: the linked/current verifier configuration is active through ignored environment state; the two approved migrations are present; `npm run verify:prisma` and Prisma validate/status gates are clean.
 - Completion receipt: memory save was verified successful (`memory.md` updated); this documentation-only terminal closure is recorded without resetting or deleting dispatch files, per explicit instruction. No code, schema, migration, config, dependency, environment, commit, push, or deploy changes were made.
 
+## GF-PHASE1-001 — Organization-Scoped Grant Tracking
+
+- R1 review: **PASS** after F1 edit-payload remediation and F2 PostgreSQL evidence verification; remaining F3/F4 findings are minor and non-blocking.
+- Implemented and fast-forward merged to `main` at commit `7458a98`.
+- Validation evidence: fresh disposable PostgreSQL integration run **20 passed / 0 skipped / 0 failed**, with clean teardown; full validation and review gates are recorded in `dispatch/REVIEW.md` and `dispatch/MODEL-LOG.md`.
+- Explicit deferrals: production hardening/auth audit and deletion/restoration.
+- Completion receipt: memory save verified successful (`memory.md` updated); dispatch files were preserved and not reset or deleted.
+
+## GF-TAG-001 — Organization-Scoped Grant Categorization
+
+- R1 review: **PASS**. No Critical or Important findings remain; five Minor findings are non-blocking.
+- Implemented scope: database-enforced organization-scoped `normalizedName` uniqueness with collision-safe backfill, member/admin tag creation and active listing, idempotent grant assignment/removal, scoped serialized display in the grants list and existing detail Sheet, and no tag Activity writes.
+- Validation evidence: **7/7** tag-specific disposable-PostgreSQL tests passed; the full suite reported 131 passed / 27 skipped; lint, TypeScript, Prisma validation, build, and diff checks were clean, with disposable database teardown clean. The independent reviewer disclosed that the tag DB result was recorded evidence rather than re-run in that review because the admin URL was unavailable.
+- Explicit deferrals preserved: tag filtering/search, rename, delete/restore, colors, hierarchy/groups, standalone management, bulk operations, import, analytics/reporting, suggestions/automation, funder-detail display, full grant-detail routing, and tag Activity.
+- Superseded report inventory and material summary: `dispatch/TEST-VERIFICATION.md` was a one-off 151-line premium verification report whose final verdict was BLOCKED because tag-specific PostgreSQL suites were then absent/unavailable. It recorded clean static checks and 131 normal tests with skipped database suites, and its addenda recorded a 20/20 non-tag disposable gate while explicitly identifying missing tag migration, tenant, mutation, idempotency, role, soft-delete, malformed-join, and no-Activity coverage. Later tag suites and the R1 record superseded those claims; the report was deleted after this summary was recorded. No other dispatch report was deleted.
+- Completion receipt: `memory.md` update was durably verified successful before this record was written. GF-TAG-001 documentation closure is complete; active planning files were not reset, `COMPLETED.md` was preserved, and no application, schema, migration, database, dependency, environment, or Git-state changes were made.
+- Next target: begin planning GF-GRANT-002, including the deferred tag-filtering/search scope.
+
 ## Rewrite context/project-brief.md
 
 - Reorganized the canonical product brief into exactly 20 retrieval-friendly sections.

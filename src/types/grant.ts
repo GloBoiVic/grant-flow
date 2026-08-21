@@ -1,6 +1,7 @@
 import type { GrantStatus } from "@/lib/validations/grant";
 import type { ActionResult } from "@/types/common";
 import type { FunderDto } from "@/types/funder";
+import type { TagDto } from "@/types/tag";
 
 export interface ActivityDto {
   id: string;
@@ -30,6 +31,7 @@ export interface GrantDto {
   createdById: string;
   createdAt: string;
   updatedAt: string;
+  tags: TagDto[];
 }
 
 export interface GrantListItemDto extends GrantDto {

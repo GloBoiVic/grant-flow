@@ -8,7 +8,7 @@
 |---|---|
 | **ID** | GF-SHELL-001 |
 | **Phase** | Phase 0 — Platform Foundation |
-| **Status** | In Progress |
+| **Status** | Complete |
 | **Product Goal** | Provide the authenticated application shell that wraps all feature routes with navigation, layout, and shared UI infrastructure |
 | **MVP Classification** | Prerequisite — required by all feature screens |
 | **Roadmap Link** | [Phase 0 — Platform Foundation](../../roadmap.md#5-phase-0-platform-foundation) |
@@ -109,35 +109,35 @@ After signing in, users see a consistent application shell with sidebar navigati
 
 ## 13. Acceptance Criteria
 
-- [ ] `(authenticated)/` route group exists with layout
-- [ ] Sidebar renders with all MVP navigation links
-- [ ] Topnav renders with org name and user avatar
-- [ ] Sidebar collapses and expands via toggle
-- [ ] Active navigation item is visually indicated
-- [ ] User dropdown includes sign out action
-- [ ] shadcn/ui is initialized and primitives can be installed
-- [ ] `cn()` utility exists in `src/lib/utils.ts`
-- [ ] `loading.tsx` shows skeleton at shell level
-- [ ] `error.tsx` preserves shell and shows recovery action
-- [ ] All tokens reference `globals.css` — no inline colors
-- [ ] Shell matches screenshot composition (sidebar, topnav proportions)
+- [x] `(authenticated)/` route group exists with layout
+- [x] Sidebar renders with all MVP navigation links
+- [x] Topnav renders with org name and user avatar
+- [x] Sidebar collapses and expands via toggle
+- [x] Active navigation item is visually indicated
+- [x] User dropdown includes sign out action
+- [x] shadcn/ui is initialized as owned generated components and the approved primitives exist
+- [x] `cn()` utility exists in `src/lib/utils.ts`
+- [x] `loading.tsx` shows skeleton at shell level
+- [x] `error.tsx` preserves shell and shows recovery action
+- [x] All tokens reference `globals.css` — no inline colors
+- [x] Shell matches screenshot composition (sidebar, topnav proportions)
 
 ## 14. Dependencies
 
 - GF-AUTH-001 (requires authentication flow to be functional)
 - GF-DATA-001 (requires local User/Organization tables)
 
-**Unresolved decisions:**
+**Resolved implementation notes:**
 - Collapsed sidebar width: 80px (current token) vs. 60px (older spec) — must reconcile during implementation
 - Responsive breakpoints for mobile sidebar behavior
-- shadcn/ui initialization reconciliation with Tailwind v4, hex tokens, light-only policy
-- Icon convention — lucide-react convention to be finalized during shadcn init
+- shadcn is initialized through `components.json`; generated components are owned source files, not a runtime product feature or a package requirement.
+- The approved generated primitives are Button, Badge, Sheet, DropdownMenu, Avatar, and Skeleton. lucide-react is the icon convention.
 
 ## 15. Completion Criteria
 
 - All acceptance criteria pass
 - Shell matches screenshot composition
-- shadcn/ui is initialized and documented in `dispatch/DECISIONS.md`
+- shadcn is initialized as an owned generated-component foundation and documented in `dispatch/DECISIONS.md`
 - Navigation works end-to-end (links navigate to routes that will be built in later phases)
 - Responsive sidebar behavior works at target viewports
 

@@ -225,3 +225,126 @@ No remaining Critical or Important findings.
 - **F3 / F4 remain Minor and non-blocking.**
 
 No code, doc, Git, database, dependency, or environment changes were made during this re-review.
+
+---
+
+# Review — GF-TAG-001 Organization-Scoped Grant Categorization
+
+Gate: R1
+Date: 2026-08-21
+Reviewer: independent (R1 formal review)
+Reviewed scope: complete change set relative to starting SHA `7458a98e290a83c76c62af27cea5381af157189c` on branch `feature/gf-tag-001` (tracked modifications + untracked tag files in the working tree).
+
+---
+
+## Benchmarks consulted
+
+- `AGENTS.md`, `dispatch/PLAN.md`, `dispatch/ARCHITECTURE.md`, `dispatch/TASKS.md`, `dispatch/DECISIONS.md`, `dispatch/COMPLETED.md`, `dispatch/MODEL-LOG.md`, `dispatch/TEST-VERIFICATION.md`
+- `context/database.md` (Tag/GrantTag authority), `prisma/schema.prisma`
+- Full tracked diff from `7458a98` plus every new/untracked tag file: `src/types/tag.ts`, `src/lib/validations/tag.ts`, `src/lib/queries/tags.ts`, `src/app/(authenticated)/(org-required)/grants/tag-actions.ts`, `src/components/grants/tag-manager.tsx`, `prisma/migrations/20260821120000_add_tag_normalized_name/migration.sql`, `src/test/tag-actions.test.ts`, `src/test/tag-dto.test.ts`, `src/test/postgres-tag.integration.test.ts`, `src/test/postgres-tag-migration.integration.test.ts`, plus the modified grant query/serializer/action/UI/test files.
+
+## Spec compliance: PASS
+## Task quality: PASS
+## Layer 1 (plan alignment): PASS
+## Layer 2 (system integrity): PASS
+## Layer 3 (production readiness): PASS
+
+---
+
+## Summary of independent verification (what I actually ran)
+
+I did **not** modify code, docs, Git state, the database, dependencies, or the environment. Gates run in this checkout:
+
+| Gate | Command | Result |
+|---|---|---|
+| Tests | `npm run test:run` | **131 passed / 27 skipped** (158 total) |
+| Lint | `npm run lint` | clean |
+| TypeScript | `npx tsc --noEmit --incremental false` | clean (exit 0) |
+| Prisma | `npx prisma validate` | valid |
+| Build | `npm run build` | compiled successfully |
+| Diff hygiene | `git diff --check` | clean |
+
+**PostgreSQL-backed execution was NOT re-run.** All four opt-in integration suites
+(`postgres-tag`, `postgres-tag-migration`, `postgres-domain-isolation`,
+`postgres-onboarding` — 27 tests) are gated behind `GRANTFLOW_TEST_DATABASE_ADMIN_URL`,
+which is **not set** in this environment and may not be modified. I verified the DB-backed
+tag/migration acceptance **by code inspection and by the consistency of the recorded evidence**
+(see F3), not by reproduction. Suite composition is verified: `postgres-tag` has exactly 5
+`it()` tests and `postgres-tag-migration` exactly 2, matching the recorded "7/7" tag DB count;
+the 27 skipped match the 4 gated files exactly.
+
+---
+
+## Findings
+
+### F1 — MINOR — Tag data-model authority (`context/database.md`) still labels the migration/constraint as "planned"/"not implemented"
+
+- **Location** `context/database.md` (Tag table note, Tag section, uniqueness table).
+- **Evidence** The authority doc states the `normalizedName` column and `(organizationId, normalizedName)` key are "upcoming"/"planned" and "does not claim that migration is implemented." In this change set the migration **is** implemented: `prisma/schema.prisma:194` adds required `normalizedName`, `prisma/migrations/20260821120000_add_tag_normalized_name/migration.sql` exists, and `prisma validate` passes.
+- **Impact** Documentation drift only; the schema/code/migration are the operative reality and are consistent with one another. Non-blocking.
+- **Remedy** Optionally update the Tag authority section to record the migration as implemented once the R1 pass is confirmed.
+
+### F2 — MINOR — `dispatch/TEST-VERIFICATION.md` is stale (final verdict BLOCKED; asserts the tag migration test "does not exist")
+
+- **Location** `dispatch/TEST-VERIFICATION.md` (verdict, coverage tables, addenda).
+- **Evidence** Its final verdict is **BLOCKED** and it states `postgres-tag-migration.integration.test.ts` "does not exist." That report predates the two tag integration suites added under `dispatch/MODEL-LOG.md:29` ("GF-TAG-001 tag PostgreSQL coverage … 7/7 tag DB tests … 131 full tests (27 skipped)") and `dispatch/TASKS.md` task 9, both of which record a passing tag-specific DB gate. Both tag suites now exist.
+- **Impact** A contradictory stale record; it is a one-off report slated for deletion at closure, and the operative authority (`MODEL-LOG.md`, `TASKS.md`) reflects the current state. Non-blocking.
+- **Remedy** Treat `TEST-VERIFICATION.md` as superseded one-off evidence; delete/archive it at terminal closure.
+
+### F3 — MINOR — DB-backed tag/migration gate assessed on recorded evidence, not independently reproduced
+
+- **Location** `src/test/postgres-tag.integration.test.ts`, `src/test/postgres-tag-migration.integration.test.ts`, `dispatch/TASKS.md:17`, `dispatch/MODEL-LOG.md:29`.
+- **Evidence** The recorded 7/7 tag DB pass and 131-passed/27-skipped claim are **internally consistent** with what I verified: the two suites contain exactly 7 `it()` tests (5+2), and my own normal run reproduced **131 passed / 27 skipped**. Teardown/guard structure is sound (disposable DBs created/dropped in `beforeAll`/`afterAll`, `GRANTFLOW_TEST_DATABASE_ADMIN_URL` gate). However, I could not execute the DB gate here (admin URL unset; environment immutable).
+- **Impact** The security-critical tenant-isolation and migration-safety acceptance rests on recorded attestation rather than an independently reproduced run in this review. Consistent with the GF-PHASE1-001 F2 precedent, this is a disclosed limitation, not a blocker, on recorded evidence with no contradictory signal.
+- **Remedy** If a fresh disposable-PostgreSQL run is required as hard gate evidence, execute it with `GRANTFLOW_TEST_DATABASE_ADMIN_URL` pointed at a disposable server and record the count.
+
+### F4 — MINOR — mutation-returned grant DTOs hardcode `tags: []`
+
+- **Location** `src/app/(authenticated)/(org-required)/grants/actions.ts` `grantDto()`.
+- **Evidence** `grantDto()` adds `tags: []` unconditionally, so the DTOs returned by `createGrant`/`editGrant`/`changeGrantStatus` never carry the assigned-tag set. `TagManager` initializes from `grant.tags` once and self-reconciles from server-confirmed action results plus `router.refresh()`, so the Sheet's tag display is not visibly regressed.
+- **Impact** Cosmetic/structural only; no user-visible tag-loss or data error observed. Non-blocking.
+- **Remedy** Optionally populate tags in mutation responses, or document that reads (`getGrant`/`listGrants`) are the sole tag source.
+
+### F5 — MINOR — concurrency/role edge coverage in the DB suite is partial
+
+- **Location** `src/test/postgres-tag.integration.test.ts`.
+- **Evidence** The "idempotent" DB test exercises sequential double-assign/double-remove (count-based), not a true concurrent double-assign; the code path is safe (`grantTag.createMany` with `skipDuplicates: true` backed by the composite `@@id`). Role coverage verifies member-assign + admin-remove and unrecognized-role denial, but not every role×action pairing.
+- **Impact** Minor test-coverage gap only; the underlying guards are correct by inspection and the earlier `tag-actions.test.ts` mocks cover the remaining paths. Non-blocking.
+- **Remedy** Optional: add a concurrent `Promise.all` double-assign DB case and the missing role×action pairs.
+
+---
+
+## Acceptance-criteria verification (by inspection except where noted)
+
+- **normalizedName migration + collision behavior** — PASS. Migration adds nullable column, backfills `lower(btrim("name"))`, runs a `DO` block that `RAISE EXCEPTION`s on normalized collisions (listing offending org/name/tagIds, never merging/deleting/renaming), `SET NOT NULL`, drops the old `Tag_organizationId_name_key` index, and creates `Tag_organizationId_normalizedName_key`. `migration-chain.test.ts` asserts the SQL shape; `postgres-tag-migration.integration.test.ts` (recorded passing) covers fresh deploy, non-conflicting backfill (`['education','housing']`), and collision refusal with preserved `name`/`GrantTag` history.
+- **Clerk-derived scope** — PASS. `requireAuthorization()`/`authorizeAction()` derive `organizationId` from the signed Clerk session (`src/lib/clerk/authorization.ts`); actions pass `authorization.organizationId` and never accept it from the client; strict Zod schemas reject `organizationId`/`normalizedName`/`color`/timestamps.
+- **Member/admin actions** — PASS. `authorizeAction()` with no minimum role admits both `org:member` and `org:admin`; DB test confirms member create/assign + admin remove and rejects unrecognized `org:viewer`.
+- **Cross-org / missing / soft-deleted hiding** — PASS (code + recorded DB). `listTags` filters `organizationId` + `deletedAt: null`; `listGrants`/`getGrant` nest a `grantTags` select that filters the related Tag by same org + active; DB test seeds cross-org, soft-deleted, and malformed `GrantTag` joins and asserts they never appear in lists/DTOs.
+- **Active relation filtering** — PASS. `assignTagToGrant`/`removeTagFromGrant` verify grant (id, org, active, active same-org funder) and tag (id, org, active) inside the transaction; any unavailable relation returns the generic "Grant or tag not found." and writes nothing.
+- **Idempotency** — PASS. Assign checks existing then `createMany(skipDuplicates)`; remove checks then `deleteMany`; DB test asserts duplicate assignment yields a single row and absent removal is a no-op.
+- **No Activity** — PASS. Tag actions never import/write Activity; DB test asserts the `Activity` count is unchanged across create/assign/remove.
+- **DTO serialization** — PASS. `TagDto` exposes only `id`/`name`; `GrantDto.tags: TagDto[]`; `serializeTag` maps plain fields; `tag-dto.test.ts` asserts JSON round-trip serializability. No Prisma/Date objects cross the boundary.
+- **List/Sheet-only UI + deferrals** — PASS. Only the grants list `TagSummary` (bounded preview + accessible "+N more") and the existing query-parameter `GrantDetailSheet` `TagManager` are added; no `/tags` route, no `/grants/[id]`, no filter/search/rename/delete/color/hierarchy/dashboard/import UI. Sheet order is summary → Tags → Activity as specified; 480px/Sheet contract preserved.
+- **No regression** — PASS. Cursor pagination, amount/date/status/activity serialization, create/edit/status flows, and dirty-form protection unchanged; full normal suite, lint, tsc, build, and `prisma validate` all clean.
+
+---
+
+## Review — GF-TAG-001
+
+- Gate: R1
+- Spec compliance: PASS
+- Task quality: PASS
+- Layer 1 (plan alignment): PASS
+- Layer 2 (system integrity): PASS
+- Layer 3 (production readiness): PASS
+- Findings: F1 Minor, F2 Minor, F3 Minor, F4 Minor, F5 Minor
+- Decision: **PASS**
+
+## Rationale
+
+- The feature is functionally complete and matches the approved blueprint exactly: case-insensitive uniqueness via a reviewed, collision-safe migration; Clerk-derived org scope; member/admin actions; cross-org/missing/soft-deleted hiding on every read and mutation boundary; idempotent assignment/removal; no tag Activity; fully serializable DTOs; list/Sheet-only UI with all planned loading/empty/error/success/accessibility states; and no out-of-scope additions.
+- The migration is well-constructed and covered by a dedicated disposable-PostgreSQL suite (fresh deploy, non-conflicting backfill, collision refusal with history preserved).
+- **No Critical or Important findings remain.** All five findings are Minor. The only substantive caveat is F3 — the DB-backed tag/migration gate was assessed on recorded evidence (consistent with suite composition and my reproduced 131/27 normal run) rather than independently re-executed, because the disposable-PostgreSQL admin URL is unset and the environment must not be modified. This mirrors the GF-PHASE1-001 F2 precedent, where recorded evidence with sound structure was accepted as non-blocking.
+- A terminal pass here permits the documenter to begin closure for GF-TAG-001; closure additionally requires the documented completion protocol (COMPLETED.md record, `remember save`, and inventory/deletion of the superseded `TEST-VERIFICATION.md` one-off).
+
+No code, doc, Git, database, dependency, or environment changes were made during this review.

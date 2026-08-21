@@ -40,9 +40,9 @@
 
 ### What Does Not Exist
 
-- **shadcn/ui** — Not initialized (globals.css is pre-configured)
+- **shadcn/ui** — Initialized as owned generated components via `components.json`; `Button`, `Badge`, `Sheet`, `DropdownMenu`, `Avatar`, and `Skeleton` exist under `src/components/ui/`. This is component source ownership, not a runtime product feature.
 - **Database / Prisma** — No `prisma/` directory, schema, migrations, or client
-- **Clerk authentication** — Not installed or configured
+- **Clerk authentication** — Implemented for the Phase 0 auth boundary, including middleware, authenticated layout, Clerk-native auth pages, and the signed-session organization/role authority
 - **Supabase Storage** — Not configured
 - **API / Server Actions** — No route handlers or server actions
 - **Functional GrantFlow screens** — No routes, components, or layouts beyond the root page and layout
@@ -104,7 +104,7 @@ Features list their specific dependencies in their individual specs (§14). The 
 ```
 Foundation (Phase 0):
   GF-DATA-001 ──► (none — foundation)
-  GF-AUTH-001 ──► GF-DATA-001 (local User/Organization/Membership tables)
+  GF-AUTH-001 ──► GF-DATA-001 (local User/Organization projection tables)
   GF-SHELL-001 ──► GF-AUTH-001, GF-DATA-001
 
 Core Tracker (Phase 1):
@@ -157,8 +157,8 @@ Features within the same phase can generally be built in any order respecting th
 | ID | Feature | Status |
 |---|---|---|
 | GF-DATA-001 | Core Persistence Foundation | Complete |
-| GF-AUTH-001 | Authentication and Organization Access | In Progress |
-| GF-SHELL-001 | Authenticated Application Shell | In Progress |
+| GF-AUTH-001 | Authentication and Organization Access | Complete |
+| GF-SHELL-001 | Authenticated Application Shell | Complete |
 
 ### User Outcome
 
@@ -459,7 +459,7 @@ The following decisions must be resolved before the corresponding build phase ca
 | **Grant semantics** | One Grant = one specific opportunity/application cycle. Repeated annual applications are distinct Grant records associated with the same Funder. No separate Opportunity entity. Year is implicit in deadline/decision dates. | ✅ Resolved |
 | **Role model** | Exactly three local roles: `ADMIN`, `MEMBER`, `VIEWER`. Clerk roles map as `org:admin` → `ADMIN`, `org:member` → `MEMBER`, unassigned/default → `VIEWER`. | ✅ Resolved |
 | **Identity reconciliation** | Database-backed, idempotent, retry-safe. Webhook upserts by Clerk ID; handles out-of-order events via Clerk retry; duplicate deliveries safe. Local tables are a read-optimized projection behind `src/lib/clerk/` adapter boundary. | ✅ Resolved |
-| **Testing framework** | Vitest + React Testing Library for unit/integration; Playwright for E2E. **Not installed.** | ✅ Resolved |
+| **Testing framework** | Vitest + React Testing Library for unit/integration is installed; Playwright remains planned for future E2E coverage. | ✅ Resolved |
 | **Tag taxonomy/cardinality** | Flat, organization-scoped, user-created, reusable, many-to-many with grants. Free-form (no bounded list). No global taxonomy. Colors deferred. | ✅ Resolved |
 | **Project brief reconciliation** | All ambiguous grant/tag language resolved in `context/project-brief.md`. | ✅ Resolved |
 
@@ -479,8 +479,6 @@ The following decisions must be resolved before the corresponding build phase ca
 | **Import failure semantics** | Batch rollback vs. row-level error handling. | GF-IMPORT-001 | GF-IMPORT-001 implementation |
 | **Responsive breakpoints** | Exact breakpoint values and responsive behavior. | GF-SHELL-001, GF-DASH-001, GF-GRANT-002 | GF-SHELL-001 implementation |
 | **Collapsed sidebar width** | 80px (current token) vs. 60px. | GF-SHELL-001 | GF-SHELL-001 implementation |
-| **shadcn/ui initialization** | Reconciliation with Tailwind v4, hex tokens, light-only policy. | GF-SHELL-001 | GF-SHELL-001 implementation |
-| **Icon convention** | lucide-react finalization alongside shadcn. | GF-SHELL-001 | GF-SHELL-001 implementation |
 | **Chart library** | Library (if any) for dashboard charts. Text/table fallback required. | GF-DASH-001 | GF-DASH-001 implementation |
 
 ### Production Hardening / Later (No Blocking Required for MVP Development)
@@ -512,8 +510,6 @@ The following decisions remain open and should be resolved before or during impl
 | 6 | **Responsive breakpoints.** Exact breakpoint values and responsive behavior for sidebar, tables, and layouts. | GF-SHELL-001, GF-DASH-001, GF-GRANT-002 | `context/design.md` | Resolve Before Related Feature |
 | 7 | **Collapsed sidebar width.** 80px (current token) vs. 60px (older spec language). | GF-SHELL-001 | `context/design.md` | Resolve Before Related Feature |
 | 8 | **Chart library.** What library (if any) for dashboard charts? Must have text/table alternative. | GF-DASH-001 | `context/design.md` | Resolve Before Related Feature |
-| 9 | **shadcn/ui initialization.** Reconciliation of generated files with Tailwind v4, hex tokens, light-only policy, and GrantFlow density. | GF-SHELL-001 | `context/design.md` | Resolve Before Related Feature |
-| 10 | **Icon convention.** lucide-react is planned but not installed. Finalize alongside shadcn initialization. | GF-SHELL-001 | `context/design.md` | Resolve Before Related Feature |
 | 11 | **Logging framework.** Console logging acceptable early; structured logging before production. | All features | `context/architecture.md` | Production Hardening / Later |
 
 ---
@@ -522,8 +518,8 @@ The following decisions remain open and should be resolved before or during impl
 
 | ID | Feature | Phase | Status | Roadmap Section |
 |---|---|---|---|---|
-| GF-AUTH-001 | Authentication and Organization Access | Phase 0 | In Progress | §5 |
-| GF-SHELL-001 | Authenticated Application Shell | Phase 0 | In Progress | §5 |
+| GF-AUTH-001 | Authentication and Organization Access | Phase 0 | Complete | §5 |
+| GF-SHELL-001 | Authenticated Application Shell | Phase 0 | Complete | §5 |
 | GF-DATA-001 | Core Persistence Foundation | Phase 0 | Complete | §5 |
 | GF-FUNDER-001 | Funder Directory and History | Phase 1 | Planned | §6 |
 | GF-GRANT-001 | Grant Records and Lifecycle | Phase 1 | Planned | §6 |

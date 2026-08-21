@@ -51,8 +51,9 @@ function grantDto(grant: {
     decisionDate: grant.decisionDate?.toISOString().slice(0, 10) ?? null, awardTimeframe: grant.awardTimeframe,
     designation: grant.designation, countyServed: grant.countyServed, nextSteps: grant.nextSteps, notes: grant.notes,
     ownerId: grant.ownerId, createdById: grant.createdById, createdAt: grant.createdAt.toISOString(), updatedAt: grant.updatedAt.toISOString(),
-    funder: { ...grant.funder, createdAt: grant.funder.createdAt.toISOString(), updatedAt: grant.funder.updatedAt.toISOString() },
-    activities: activity ? [activity] : [],
+     funder: { ...grant.funder, createdAt: grant.funder.createdAt.toISOString(), updatedAt: grant.funder.updatedAt.toISOString() },
+     tags: [],
+     activities: activity ? [activity] : [],
   };
 }
 

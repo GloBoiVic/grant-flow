@@ -208,7 +208,7 @@ Replace the spreadsheet-based grant tracker with a faster, cleaner, more reliabl
 
 Clerk is the authentication, active-organization, and role authority. Protected requests use the signed Clerk session `userId`, active `orgId`, and recognized `orgRole`; local `User` and `Organization` rows are webhook-maintained projections and domain references, not authorization state. The supported projection webhooks are exactly `user.created`, `user.updated`, `organization.created`, and `organization.updated`; unsupported membership/deletion events no-op. The MVP supports first-organization onboarding and does not expose organization switching or member-management UI.
 
-**Current implementation:** The simplified Clerk-first foundation is implemented. Automated verification records 99 passing tests and 1 skipped PostgreSQL-dependent test; fresh disposable PostgreSQL migration integration passed for the two-migration chain and onboarding claim lease. Manual sign-up/first organization creation, sign-in, protected redirects, projection webhook flow, and sign-out checks passed. Final R2 review remains open; terminal GF-AUTH-001 completion is not claimed.
+**Current implementation:** The simplified Clerk-first foundation is complete. Automated verification records 99 passing tests and 1 skipped PostgreSQL-dependent test; fresh disposable PostgreSQL migration integration passed for the two-migration chain and onboarding claim lease. Manual sign-up/first organization creation, sign-in, protected redirects, projection webhook flow, sign-out, and authenticated shell checks passed. GF-AUTH-001, GF-SHELL-001, and GF-DATA-001 are complete.
 
 ---
 
@@ -299,9 +299,9 @@ When faced with ambiguous product requirements, use these questions to guide dec
 
 ### Not Implemented
 
-- **shadcn/ui** — Not installed. `globals.css` is pre-configured for it but `npx shadcn@latest init` has not been run.
+- **shadcn/ui** — Initialized as owned generated components via `components.json`, with Button, Badge, Sheet, DropdownMenu, Avatar, and Skeleton under `src/components/ui/`. This is not a runtime product feature requiring a package.
 - **Database / Prisma** — Prisma schema, client, and two migrations are implemented; fresh disposable PostgreSQL migration checks pass.
-- **Clerk authentication** — Simplified Clerk authentication and organization access are implemented; final R2 review remains open and terminal GF-AUTH-001 completion is not claimed.
+- **Clerk authentication** — Simplified Clerk authentication and organization access are complete for the MVP foundation; the authenticated application shell and Prisma persistence foundation are also complete.
 - **Supabase Storage** — Not configured. No file upload infrastructure.
 - **API / Server Actions** — Clerk webhook route handling and the onboarding organization Server Action are implemented; domain query/action modules remain unimplemented. Functional GrantFlow screens are still absent.
 - **Functional GrantFlow screens** — No dashboard, grants list, grant detail, funder list, deadlines, search, filter chips, empty states, or slide-over panels exist. `page.tsx` is create-next-app boilerplate.
