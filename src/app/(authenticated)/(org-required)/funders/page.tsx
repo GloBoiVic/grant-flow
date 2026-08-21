@@ -1,12 +1,9 @@
 import type { ReactNode } from "react";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { FunderPage } from "@/components/funders/funder-page";
+import { listFunders } from "@/lib/queries/funders";
 
-export default function FundersPage(): ReactNode {
-  return (
-    <FeaturePlaceholder
-      title="Funders"
-      description="Funder records and the grant history connected to them will be available here."
-    />
-  );
+export default async function FundersPage(): Promise<ReactNode> {
+  const funders = await listFunders();
+  return <FunderPage funders={funders.items} />;
 }

@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
 import DashboardPage from "@/app/(authenticated)/(org-required)/dashboard/page";
-import GrantsPage from "@/app/(authenticated)/(org-required)/grants/page";
-import FundersPage from "@/app/(authenticated)/(org-required)/funders/page";
 import DeadlinesPage from "@/app/(authenticated)/(org-required)/deadlines/page";
 import ImportPage from "@/app/(authenticated)/(org-required)/import/page";
 
@@ -31,8 +29,6 @@ describe("FeaturePlaceholder", () => {
 
 describe.each([
   ["Dashboard", DashboardPage, "Dashboard"],
-  ["Grants", GrantsPage, "Grants"],
-  ["Funders", FundersPage, "Funders"],
   ["Deadlines", DeadlinesPage, "Deadlines"],
   ["Import", ImportPage, "Import"],
 ])("%s placeholder route", (_name, Page, title) => {

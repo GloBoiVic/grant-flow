@@ -24,8 +24,6 @@
 .DS_Store
 *.pem
 .agents
-/context/
-dispatch/
 
 # debug
 npm-debug.log*
