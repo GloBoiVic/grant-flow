@@ -81,7 +81,7 @@ These are **design constraints** for all implementation work. Where noted, found
 
 - **Auth** — Clerk for authentication. No custom auth.
 - **Authorization** — Role-based access within an organization. Users see only their org's data.
-- **Organization isolation** — All data scoped by organization ID. Cross-org access prohibited.
+- **Organization isolation** — All data scoped by the active organization in the signed Clerk session. Cross-org access prohibited.
 - **Validation** — Zod schemas gate every Server Action and Route Handler. Client validation is UX-only.
 - **Server/client boundaries** — Server Actions or Route Handlers for mutations. No direct DB access from client.
 - **Sensitive data** — No secrets in client code. DB credentials in environment variables only.
@@ -116,9 +116,9 @@ These are **design constraints** for all implementation work. Where noted, found
 - `data/mock-grant-data.xlsx` — sample spreadsheet data
 - Dispatch workflow files under `dispatch/`
 - Project documentation files: `context/architecture.md`, `context/tech-stack.md`, `context/database.md`, `context/coding-standards.md`, `context/design.md`, `context/index.md`, `dispatch/DECISIONS.md`
-- Prisma 7.9.1 persistence foundation (GF-DATA-001): `prisma/schema.prisma` (11 models, 3 enums), `prisma.config.ts`, initial migration `20260810055726_init`, server-only singleton `src/lib/prisma.ts` with `PrismaPg` adapter, generated client under `src/generated/prisma/`, `.env.example` placeholder only. Committed at `0402ada`. Prisma Compute deployed.
-- Clerk authentication and organization access (GF-AUTH-001, **In Progress — manual gates open**): `@clerk/nextjs` installed; `src/proxy.ts` middleware protecting all routes except `/login`, `/sign-up`, `/api/webhooks/clerk`; `ClerkProvider` authenticated sub-layout under `src/app/(authenticated)/`; Clerk-native sign-in/sign-up pages matching `screenshots/login.png`; server-only adapter in `src/lib/clerk/` (session, roles, projections, authorization, webhook); signature-verified + Zod-validated webhook route `src/app/api/webhooks/clerk/route.ts`; Membership incarnation fencing via expand-only migration `20260813000000_add_membership_clerk_membership_id` (nullable unique `clerkMembershipId`; Clerk-backed backfill and NOT NULL contraction deferred).
-- Vitest + React Testing Library test tooling (GF-AUTH-001): `vitest.config.ts`, 5 test files in `src/test/` (42 tests passing). Reconciled after Task 7: 7 test files in `src/test/` (60 tests passing).
+- Prisma 7.9.1 persistence foundation (GF-DATA-001): `prisma/schema.prisma` (11 models, 2 enums), `prisma.config.ts`, two clean migrations including the onboarding claim create lease, server-only singleton `src/lib/prisma.ts` with `PrismaPg` adapter, generated client under `src/generated/prisma/`, `.env.example` placeholder only. Committed at `0402ada`. Prisma Compute deployed.
+- Clerk authentication and organization access (GF-AUTH-001, **final R2 review open**): `@clerk/nextjs` installed; `src/proxy.ts` middleware protects all routes except `/login`, `/sign-up`, and `/api/webhooks/clerk`; `ClerkProvider` authenticated sub-layout under `src/app/(authenticated)/`; Clerk-native sign-in/sign-up pages match `screenshots/login.png`; the signed Clerk session's `userId`, active `orgId`, and recognized `orgRole` are authoritative; local `User` and `Organization` rows are webhook-maintained projections. The webhook route is signature-verified and Zod-validated, with exactly four supported idempotent upserts: `user.created`, `user.updated`, `organization.created`, and `organization.updated`. Unsupported membership/deletion events no-op. The simplified persistence path has two clean migrations, including the onboarding claim create lease.
+- Vitest + React Testing Library test tooling (GF-AUTH-001): 99 tests pass and 1 PostgreSQL-dependent test is skipped; lint, TypeScript, build, and Prisma validation are clean, and fresh disposable PostgreSQL migration integration passed.
 - `.env.example` — secret-safe placeholders for `DATABASE_URL`, Clerk keys, and webhook signing secret; no credentials committed.
 
 ### Not Implemented
@@ -127,7 +127,7 @@ These are **design constraints** for all implementation work. Where noted, found
 - **Server Actions / domain route handlers** — Webhook route handler exists; no domain Server Actions or query modules yet.
 - **Any functional GrantFlow screen** — No dashboard content, grants list, grant detail, funder list, deadlines, search, filter chips, empty states, or slide-over panels exist (auth boundary pages only).
 - **README.md** — Still default `create-next-app` boilerplate. Does not describe GrantFlow.
-- **Terminal closure for GF-AUTH-001** — Manual Clerk configuration verification and final review sign-off remain.
+- **Terminal closure for GF-AUTH-001** — Final R2 review remains open. Manual checks passed for sign-up/first organization creation, sign-in, protected redirects, projection webhook flow, and sign-out. No terminal completion is claimed.
 
 ### Pre-Existing User Changes (Preserved, Not Altered)
 - `CLAUDE.md` — Was deleted by user. Do not recreate.

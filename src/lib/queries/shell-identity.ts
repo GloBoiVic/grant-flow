@@ -18,12 +18,6 @@ export class ShellIdentityProjectionMissingError extends Error {
   }
 }
 
-const shellIdentitySelect = {
-  organizationId: true,
-  organization: { select: { name: true } },
-  user: { select: { name: true, email: true, avatarUrl: true } },
-} as const;
-
 function deriveInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "";
@@ -34,20 +28,19 @@ function deriveInitials(name: string): string {
 export async function getShellIdentity(
   authorization: AuthorizationContext,
 ): Promise<ShellIdentityDto> {
-  const membership = await prisma.membership.findUnique({
-    where: { userId: authorization.userId },
-    select: shellIdentitySelect,
-  });
-
-  if (!membership || membership.organizationId !== authorization.organizationId) {
+  const [organization, user] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: authorization.organizationId }, select: { name: true } }),
+    prisma.user.findUnique({ where: { id: authorization.userId }, select: { name: true, email: true, avatarUrl: true } }),
+  ]);
+  if (!organization || !user) {
     throw new ShellIdentityProjectionMissingError();
   }
 
   return {
-    organizationName: membership.organization.name,
-    userName: membership.user.name,
-    userEmail: membership.user.email,
-    userAvatarUrl: membership.user.avatarUrl,
-    userInitials: deriveInitials(membership.user.name),
+    organizationName: organization.name,
+    userName: user.name,
+    userEmail: user.email,
+    userAvatarUrl: user.avatarUrl,
+    userInitials: deriveInitials(user.name),
   };
 }

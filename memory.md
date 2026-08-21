@@ -1,44 +1,42 @@
-# Memory — GrantFlow Authentication Foundation
+# Memory — GF-AUTH-001 Final R2 Review
 
-Last updated: 2026-08-13
+Last updated: 2026-08-20
 
 ## What was built
 
-- GF-DATA-001: Prisma 7 PostgreSQL schema, migrations, generated client, and server-only Prisma singleton.
-- GF-AUTH-001 implementation: Clerk sign-in/sign-up, protected routes, organization selection, server-only authorization, signed Zod-validated webhooks, and Vitest coverage.
-- Projection-pending `/access` boundary: authenticated users wait safely for webhook-synced local projections without receiving organization data.
-- Vercel build support: Prisma client generation occurs before the Next.js build.
+- Simplified Clerk session authentication and organization access are the current authority.
+- Local User and Organization rows are webhook-maintained projections only.
+- The supported projection webhook set is four events: user created/updated and organization created/updated.
+- The simplified persistence path has two migrations, with clean fresh PostgreSQL migration evidence.
+- Prisma uses the generated client with the PostgreSQL adapter and a server-only singleton.
+- Clerk middleware/provider, sign-in/sign-up pages, the authenticated shell, and the verified projection webhook are implemented.
+- A Prisma verification script was added and verified against the linked database configuration; sensitive connection details are not retained here.
 
 ## Decisions made
 
-- Clerk is the identity authority; local User, Organization, and Membership records are webhook-only projections.
-- Organization scope derives only from `auth().orgId`; authorization fails closed on missing/mismatched projections.
-- Clerk roles map to ADMIN, MEMBER, and VIEWER; unknown roles are least-privilege VIEWER.
-- Membership webhook fencing uses nullable unique `clerkMembershipId`; Clerk-backed backfill and later NOT NULL contraction are deferred.
+- Session `userId`, active `orgId`, and recognized `orgRole` are authoritative; no per-request Clerk Backend lookup.
+- Superseded membership binding, membership IDs/fencing, revocation, tenant locks, persisted local roles, reconciliation, audit, compensation, backfill, and contraction claims are not MVP behavior.
+- Unsupported membership/deletion webhook events no-op.
+- The simplified two-migration baseline is retained; the destructive baseline is suitable only for disposable databases.
 
 ## Problems solved
 
-- Prisma CLI required explicit dotenv loading through `prisma.config.ts`; database migrations are now applied.
-- Generated Prisma client is ignored by design; Vercel builds must run `prisma generate` before `next build`.
-- Clerk webhook endpoint configuration was the live signup blocker. With the correct public endpoint, signing secret, required events, and migrated database, signup → org creation → dashboard works.
-- Persistent `/access` means local webhook projections are missing or delayed; inspect Clerk webhook deliveries and database connectivity rather than creating rows manually.
-
-## Eureka moments
-
-- Local development webhook delivery requires a public endpoint or tunnel; deployed Vercel endpoint is the stable option.
-- A webhook endpoint accepts POST only; browser GET requests returning 405 are expected.
+- Final GF-AUTH R2 review passed.
+- Full final gates are clean: 99 tests passed, 1 PostgreSQL-dependent test skipped, lint, TypeScript, Prisma validate/status, Prisma verifier, build, and final diff review.
+- Manual Clerk checks passed for sign-up/first organization, sign-in, protected redirects, projection webhook flow, and sign-out.
 
 ## Current state
 
-- Current application changes are pushed to GitHub. Vercel deployment and Clerk webhook flow were manually verified after correcting endpoint configuration.
-- Automated checks previously passed: 60 tests, lint, TypeScript, production build, and Prisma validation.
-- `skills-lock.json` remains untracked and intentionally excluded from commits.
+- The current branch is a feature branch with substantial uncommitted GF-AUTH changes and the new Prisma verifier.
+- The linked Prisma Postgres configuration is stored only through ignored environment state; no IDs, URLs, tokens, or connection strings are recorded in this memory.
+- No deployment, commit, or push was performed in this session.
+- Terminal closure is not claimed here.
+- Production hardening, standalone audit, and role-specific domain CRUD UI/actions and tests are deferred until before the first domain slice.
 
 ## Next session starts with
 
-- Reconcile GF-AUTH-001 terminal documentation/manual verification status, then begin GF-SHELL-001 only after closure is confirmed.
+- Begin the next approved task from the preserved uncommitted working tree; retain the simplified auth and two-migration baseline.
 
 ## Open questions
 
-- Complete the deferred Clerk membership-ID backfill and NOT NULL migration when safely runnable against live Clerk data.
-- Resolve remaining shell decisions: shadcn initialization, icon convention, responsive breakpoints, and sidebar dimensions.
+- When the first domain slice is authorized, complete the deferred production hardening, standalone audit, and tenant/domain CRUD verification.

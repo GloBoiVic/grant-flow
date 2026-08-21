@@ -52,7 +52,7 @@ describe("shell exclusion from /access and /organization", () => {
   });
 
   it("renders constrained onboarding without any shell chrome", async () => {
-    resolveAuthorizationMock.mockResolvedValue({ status: "onboarding-eligible" });
+    resolveAuthorizationMock.mockResolvedValue({ status: "no-active-organization" });
     render(await OrganizationPage());
 
     expect(screen.getByRole("heading", { name: "Choose an organization" })).toBeInTheDocument();

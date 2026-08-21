@@ -49,7 +49,6 @@ describe("AccountMenu", () => {
   beforeEach(() => {
     installDomPolyfills();
     useClerkMock.mockReturnValue({
-      openOrganizationProfile: vi.fn(),
       openUserProfile: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
     });
@@ -64,15 +63,15 @@ describe("AccountMenu", () => {
     expect(trigger).toHaveTextContent("JD");
   });
 
-  it("opens the account menu with identity and all controls", async () => {
+  it("opens the account menu without organization profile or member-management controls", async () => {
     const user = userEvent.setup();
     render(<AccountMenu identity={identity} />);
 
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
 
     expect(await screen.findByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Organization settings")).toBeInTheDocument();
-    expect(screen.getByText("Switch organization")).toBeInTheDocument();
+    expect(screen.queryByText(/organization settings|members|manage organization/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /switch organization/i })).not.toBeInTheDocument();
     expect(screen.getByText("Sign out")).toBeInTheDocument();
   });
 
@@ -85,28 +84,9 @@ describe("AccountMenu", () => {
     expect(useClerkMock().openUserProfile).toHaveBeenCalledTimes(1);
   });
 
-  it("calls openOrganizationProfile when Organization settings is selected", async () => {
-    const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
-    await user.click(screen.getByRole("button", { name: /Open account menu/ }));
-
-    await user.click(await screen.findByText("Organization settings"));
-    expect(useClerkMock().openOrganizationProfile).toHaveBeenCalledTimes(1);
-  });
-
-  it("routes Switch organization to /organization", async () => {
-    const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
-    await user.click(screen.getByRole("button", { name: /Open account menu/ }));
-
-    const link = await screen.findByRole("menuitem", { name: /Switch organization/ });
-    expect(link).toHaveAttribute("href", "/organization");
-  });
-
   it("signs out with the /login redirect and disables while pending", async () => {
     let resolveSignOut!: () => void;
     useClerkMock.mockReturnValue({
-      openOrganizationProfile: vi.fn(),
       openUserProfile: vi.fn(),
       signOut: vi.fn().mockImplementation(() => new Promise<void>((resolve) => { resolveSignOut = resolve; })),
     });
@@ -128,7 +108,6 @@ describe("AccountMenu", () => {
 
   it("surfaces a sign-out failure in-menu with role=status and re-enables", async () => {
     useClerkMock.mockReturnValue({
-      openOrganizationProfile: vi.fn(),
       openUserProfile: vi.fn(),
       signOut: vi.fn().mockRejectedValue(new Error("boom")),
     });

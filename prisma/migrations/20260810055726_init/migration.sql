@@ -2,9 +2,6 @@
 CREATE TYPE "GrantStatus" AS ENUM ('Research', 'Qualified', 'Planning', 'Writing', 'InternalReview', 'Submitted', 'Pending', 'Awarded', 'Declined', 'Reporting', 'Closed');
 
 -- CreateEnum
-CREATE TYPE "MembershipRole" AS ENUM ('ADMIN', 'MEMBER', 'VIEWER');
-
--- CreateEnum
 CREATE TYPE "FunderType" AS ENUM ('FOUNDATION', 'FAMILY_FUND', 'CORPORATION', 'OTHER');
 
 -- CreateTable
@@ -33,14 +30,15 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
-CREATE TABLE "Membership" (
+CREATE TABLE "OnboardingClaim" (
     "id" UUID NOT NULL,
-    "organizationId" UUID NOT NULL,
-    "userId" UUID NOT NULL,
-    "role" "MembershipRole" NOT NULL,
+    "clerkUserId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "clerkOrgId" TEXT,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Membership_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "OnboardingClaim_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -183,10 +181,13 @@ CREATE UNIQUE INDEX "User_clerkUserId_key" ON "User"("clerkUserId");
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE INDEX "Membership_organizationId_userId_idx" ON "Membership"("organizationId", "userId");
+CREATE UNIQUE INDEX "OnboardingClaim_clerkUserId_key" ON "OnboardingClaim"("clerkUserId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Membership_organizationId_userId_key" ON "Membership"("organizationId", "userId");
+CREATE UNIQUE INDEX "OnboardingClaim_slug_key" ON "OnboardingClaim"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OnboardingClaim_clerkOrgId_key" ON "OnboardingClaim"("clerkOrgId");
 
 -- CreateIndex
 CREATE INDEX "Funder_organizationId_idx" ON "Funder"("organizationId");
@@ -244,12 +245,6 @@ CREATE UNIQUE INDEX "Tag_organizationId_name_key" ON "Tag"("organizationId", "na
 
 -- CreateIndex
 CREATE INDEX "ImportStaging_organizationId_importBatchId_idx" ON "ImportStaging"("organizationId", "importBatchId");
-
--- AddForeignKey
-ALTER TABLE "Membership" ADD CONSTRAINT "Membership_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-
--- AddForeignKey
-ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "Funder" ADD CONSTRAINT "Funder_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;

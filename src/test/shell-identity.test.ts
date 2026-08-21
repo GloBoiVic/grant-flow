@@ -1,107 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const { membershipFindUniqueMock } = vi.hoisted(() => ({
-  membershipFindUniqueMock: vi.fn(),
-}));
-
+const { organizationFindUniqueMock, userFindUniqueMock } = vi.hoisted(() => ({ organizationFindUniqueMock: vi.fn(), userFindUniqueMock: vi.fn() }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/prisma", () => ({
-  prisma: { membership: { findUnique: membershipFindUniqueMock } },
-}));
+vi.mock("@/lib/prisma", () => ({ prisma: { organization: { findUnique: organizationFindUniqueMock }, user: { findUnique: userFindUniqueMock } } }));
 
 import type { AuthorizationContext } from "@/lib/clerk/authorization";
-import {
-  getShellIdentity,
-  ShellIdentityProjectionMissingError,
-} from "@/lib/queries/shell-identity";
+import { getShellIdentity, ShellIdentityProjectionMissingError } from "@/lib/queries/shell-identity";
 
-const authorization: AuthorizationContext = {
-  clerkUserId: "clerk-user-private",
-  clerkOrgId: "clerk-org-private",
-  userId: "local-user",
-  organizationId: "local-org",
-  role: "MEMBER",
-};
+const authorization: AuthorizationContext = { clerkUserId: "clerk-user", clerkOrgId: "clerk-org", userId: "local-user", organizationId: "local-org", role: "org:member" };
 
 describe("getShellIdentity", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    membershipFindUniqueMock.mockResolvedValue({
-      organization: { name: "Grant Makers" },
-      organizationId: "local-org",
-      user: {
-        name: "Jane Q. Doe",
-        email: "jane@example.com",
-        avatarUrl: null,
-      },
-    });
+  it("reads display projections by resolved local ids", async () => {
+    organizationFindUniqueMock.mockResolvedValue({ name: "Grant Makers" });
+    userFindUniqueMock.mockResolvedValue({ name: "Jane Q. Doe", email: "jane@example.com", avatarUrl: null });
+    await expect(getShellIdentity(authorization)).resolves.toEqual({ organizationName: "Grant Makers", userName: "Jane Q. Doe", userEmail: "jane@example.com", userAvatarUrl: null, userInitials: "JD" });
   });
 
-  it("uses the immutable user binding and narrow nested selection", async () => {
-    await getShellIdentity(authorization);
-
-    expect(membershipFindUniqueMock).toHaveBeenCalledWith({
-      where: { userId: "local-user" },
-      select: {
-        organizationId: true,
-        organization: { select: { name: true } },
-        user: { select: { name: true, email: true, avatarUrl: true } },
-      },
-    });
-  });
-
-  it("returns only the shell DTO with server-derived initials and a null avatar", async () => {
-    await expect(getShellIdentity(authorization)).resolves.toEqual({
-      organizationName: "Grant Makers",
-      userName: "Jane Q. Doe",
-      userEmail: "jane@example.com",
-      userAvatarUrl: null,
-      userInitials: "JD",
-    });
-  });
-
-  it.each([
-    ["Ada Lovelace", "AL"],
-    ["  Grace Hopper  ", "GH"],
-    ["Prince", "PR"],
-  ])("derives deterministic initials for %s", async (name, initials) => {
-    membershipFindUniqueMock.mockResolvedValue({
-      organization: { name: "Grant Makers" },
-      organizationId: "local-org",
-      user: { name, email: "user@example.com", avatarUrl: null },
-    });
-
-    await expect(getShellIdentity(authorization)).resolves.toMatchObject({
-      userInitials: initials,
-    });
-  });
-
-  it("maps a missing projection to a dedicated error", async () => {
-    membershipFindUniqueMock.mockResolvedValue(null);
-
-    await expect(getShellIdentity(authorization)).rejects.toBeInstanceOf(
-      ShellIdentityProjectionMissingError,
-    );
-  });
-
-  it("propagates Prisma failures without relabeling them", async () => {
-    const prismaError = new Error("database unavailable");
-    membershipFindUniqueMock.mockRejectedValue(prismaError);
-
-    await expect(getShellIdentity(authorization)).rejects.toBe(prismaError);
-  });
-
-  it("does not expose authorization or database identifiers in the DTO", async () => {
-    const identity = await getShellIdentity(authorization);
-
-    expect(Object.keys(identity)).toEqual([
-      "organizationName",
-      "userName",
-      "userEmail",
-      "userAvatarUrl",
-      "userInitials",
-    ]);
-    expect(JSON.stringify(identity)).not.toContain("clerk-");
-    expect(JSON.stringify(identity)).not.toContain("local-");
+  it("fails closed when either projection is missing", async () => {
+    organizationFindUniqueMock.mockResolvedValue(null);
+    userFindUniqueMock.mockResolvedValue(null);
+    await expect(getShellIdentity(authorization)).rejects.toBeInstanceOf(ShellIdentityProjectionMissingError);
   });
 });

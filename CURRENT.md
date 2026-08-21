@@ -44,13 +44,13 @@ Acceptance
 
 Progress
 
-Completed: Phase 0 status truth was reconciled; GF-DATA-001 is complete and GF-AUTH-001 is implementation-complete with manual and final-review gates open. The approved GF-SHELL-001 sequence is recorded in `dispatch/TASKS.md`.
-In Progress: GF-SHELL-001 documentation reconciliation is complete; implementation has not yet begun. The shell will build against the existing Clerk authorization and local projection foundation.
-Remaining: GF-AUTH-001 manual Clerk configuration verification and final review remain open. GF-SHELL-001 implementation, automated verification, manual shell checks, and review remain.
+Completed: Phase 0 status truth was reconciled; GF-DATA-001 is complete and the simplified GF-AUTH-001 implementation has passed its automated and manual checks. Clerk session `userId`, active `orgId`, and recognized `orgRole` are authoritative; local `User` and `Organization` rows are projections. The approved GF-SHELL-001 sequence is recorded in `dispatch/TASKS.md`.
+In Progress: GF-SHELL-001 documentation reconciliation is complete; implementation has not yet begun. The shell will build against the Clerk-first authorization and projection foundation.
+Remaining: Final R2 review remains open; GF-AUTH-001 terminal completion is not claimed. GF-SHELL-001 implementation, automated verification, manual shell checks, and review remain.
 
 Blockers
 
-GF-AUTH-001 manual gates and final review block Phase 0/auth terminal closure. GF-SHELL-001 is in progress; no Phase 0 closure is claimed.
+GF-AUTH-001 final R2 review blocks Phase 0/auth terminal closure. GF-SHELL-001 is in progress; no Phase 0 closure is claimed.
 
 Completion Rule
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
-import { LogOut, Settings, UserRound, UsersRound } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import type { ShellIdentityDto } from "@/lib/queries/shell-identity";
@@ -21,7 +21,7 @@ interface AccountMenuProps {
 }
 
 export function AccountMenu({ identity }: AccountMenuProps): React.ReactNode {
-  const { openOrganizationProfile, openUserProfile, signOut } = useClerk();
+  const { openUserProfile, signOut } = useClerk();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
@@ -61,16 +61,6 @@ export function AccountMenu({ identity }: AccountMenuProps): React.ReactNode {
         <DropdownMenuItem onSelect={() => openUserProfile()}>
           <UserRound aria-hidden="true" />
           Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openOrganizationProfile()}>
-          <Settings aria-hidden="true" />
-          Organization settings
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href="/organization">
-            <UsersRound aria-hidden="true" />
-            Switch organization
-          </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
