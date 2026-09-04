@@ -32,7 +32,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { assignTagToGrant, createTag, removeTagFromGrant } from "@/app/(authenticated)/(org-required)/grants/tag-actions";
 
-const authorization = { organizationId: "local-org", userId: "local-user", role: "org:member" as const };
+const authorization = { organizationId: "local-org", userId: "local-user" };
 
 describe("tag Server Actions", () => {
   beforeEach(() => {
@@ -70,8 +70,8 @@ describe("tag Server Actions", () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
-  it.each(["org:member", "org:admin"] as const)("allows the current %s Clerk role", async (role) => {
-    mocks.authorizeAction.mockResolvedValue({ ...authorization, role });
+  it("allows the authorized local User", async () => {
+    mocks.authorizeAction.mockResolvedValue(authorization);
     await expect(createTag({ name: "Housing" })).resolves.toMatchObject({ success: true });
     expect(mocks.authorizeAction).toHaveBeenCalledWith();
   });

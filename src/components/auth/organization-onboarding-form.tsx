@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 import { createFirstOrganization } from "@/app/(authenticated)/organization/actions";
 
 export default function OrganizationOnboardingForm(): React.ReactNode {
   const router = useRouter();
-  const { setActive } = useClerk();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -22,18 +20,13 @@ export default function OrganizationOnboardingForm(): React.ReactNode {
         return;
       }
       setPending(true);
-      try {
-        await setActive({ organization: result.clerkOrgId });
-        router.push("/dashboard");
-        router.refresh();
-      } catch {
-        setError("Your organization is created and is still activating. Check again shortly.");
-      }
+      router.push("/dashboard");
+      router.refresh();
     });
   }
 
   if (pending) {
-    return <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">Organization created. Activating your workspace…</p>;
+    return <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">Organization created. Opening your workspace…</p>;
   }
 
   return (

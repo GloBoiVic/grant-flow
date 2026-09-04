@@ -1,12 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
-export default async function Home(): Promise<never> {
-  const { userId, orgId } = await auth();
+import { resolveAuthorization } from "@/lib/clerk/authorization";
 
-  if (!userId) {
+export default async function Home(): Promise<never> {
+  const authorization = await resolveAuthorization();
+  if (authorization.status === "unauthenticated") {
     redirect("/login");
   }
-
-  redirect(orgId ? "/dashboard" : "/organization");
+  redirect(authorization.status === "authenticated" ? "/dashboard" : "/organization");
 }

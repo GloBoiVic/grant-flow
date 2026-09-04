@@ -38,25 +38,28 @@ function withDatabase(url: string, name: string) {
   parsed.pathname = `/${name}`;
   return parsed.toString();
 }
-function session(orgId: string, role: string = "org:member") {
-  authMock.mockResolvedValue({ userId: "clerk-user", orgId: orgId === orgA ? "org_tag_a" : orgId === orgB ? "org_tag_b" : orgId, orgRole: role });
+function session(orgId: string) {
+  authMock.mockResolvedValue({ userId: orgId === orgB ? "clerk-user-b" : "clerk-user-a" });
 }
 
 async function seed(client: PrismaClient) {
   const [a, b] = await Promise.all([
-    client.organization.create({ data: { clerkOrgId: "org_tag_a", name: "Tag A", slug: `tag-a-${randomUUID()}` } }),
-    client.organization.create({ data: { clerkOrgId: "org_tag_b", name: "Tag B", slug: `tag-b-${randomUUID()}` } }),
+    client.organization.create({ data: { name: "Tag A" } }),
+    client.organization.create({ data: { name: "Tag B" } }),
   ]);
   orgA = a.id; orgB = b.id;
-  const user = await client.user.create({ data: { clerkUserId: "clerk-user", email: `${randomUUID()}@example.com`, name: "Tag Tester" } });
+  const [userA, userB] = await Promise.all([
+    client.user.create({ data: { clerkUserId: "clerk-user-a", organizationId: orgA } }),
+    client.user.create({ data: { clerkUserId: "clerk-user-b", organizationId: orgB } }),
+  ]);
   const [funderA, funderB] = await Promise.all([
     client.funder.create({ data: { organizationId: orgA, name: "Funder A", type: "FOUNDATION" } }),
     client.funder.create({ data: { organizationId: orgB, name: "Funder B", type: "FOUNDATION" } }),
   ]);
   const [aGrant, bGrant, deleted] = await Promise.all([
-    client.grant.create({ data: { organizationId: orgA, funderId: funderA.id, title: "Grant A", status: "Research", createdById: user.id } }),
-    client.grant.create({ data: { organizationId: orgB, funderId: funderB.id, title: "Grant B", status: "Research", createdById: user.id } }),
-    client.grant.create({ data: { organizationId: orgA, funderId: funderA.id, title: "Deleted Grant", status: "Research", createdById: user.id, deletedAt: new Date() } }),
+    client.grant.create({ data: { organizationId: orgA, funderId: funderA.id, title: "Grant A", status: "Research", createdById: userA.id } }),
+    client.grant.create({ data: { organizationId: orgB, funderId: funderB.id, title: "Grant B", status: "Research", createdById: userB.id } }),
+    client.grant.create({ data: { organizationId: orgA, funderId: funderA.id, title: "Deleted Grant", status: "Research", createdById: userA.id, deletedAt: new Date() } }),
   ]);
   grantA = aGrant.id; grantB = bGrant.id; softGrant = deleted.id;
   const [aTag, bTag, deletedTag] = await Promise.all([
@@ -135,25 +138,18 @@ describePostgres("tag database acceptance", () => {
   });
 
   it("gives member and admin parity, with idempotent relation operations and no Activity", async () => {
-    session(orgA, "org:member");
+    session(orgA);
     const created = await actions.createTag({ name: "Member Tag" });
     expect(created.success).toBe(true); if (!created.success) return;
     const beforeActivity = await db!.activity.count();
     expect((await actions.assignTagToGrant({ grantId: grantA, tagId: created.data.id })).success).toBe(true);
     expect((await actions.assignTagToGrant({ grantId: grantA, tagId: created.data.id })).success).toBe(true);
     expect(await db!.grantTag.count({ where: { grantId: grantA, tagId: created.data.id } })).toBe(1);
-    session(orgA, "org:admin");
+    session(orgA);
     expect((await actions.removeTagFromGrant({ grantId: grantA, tagId: created.data.id })).success).toBe(true);
     expect((await actions.removeTagFromGrant({ grantId: grantA, tagId: created.data.id })).success).toBe(true);
     expect(await db!.grantTag.count({ where: { grantId: grantA, tagId: created.data.id } })).toBe(0);
     expect(await db!.activity.count()).toBe(beforeActivity);
   });
 
-  it("rejects unrecognized roles before changing tags or joins", async () => {
-    session(orgA, "org:viewer");
-    const before = await db!.tag.count();
-    expect((await actions.createTag({ name: "Viewer Tag" })).success).toBe(false);
-    expect((await actions.assignTagToGrant({ grantId: grantA, tagId: tagA })).success).toBe(false);
-    expect(await db!.tag.count()).toBe(before);
-  });
 });

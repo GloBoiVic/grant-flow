@@ -30,11 +30,10 @@ enum FunderType {
 
 model Organization {
   id             String          @id @default(uuid()) @db.Uuid
-  clerkOrgId     String          @unique
   name           String
-  slug           String          @unique
   createdAt      DateTime        @default(now()) @db.Timestamptz
   updatedAt      DateTime        @updatedAt @db.Timestamptz
+  users          User[]
   funders        Funder[]
   funderContacts FunderContact[]
   grants         Grant[]
@@ -42,32 +41,21 @@ model Organization {
   activities     Activity[]
   tags           Tag[]
   importStaging  ImportStaging[]
-
 }
 
 model User {
-  id                       String                    @id @default(uuid()) @db.Uuid
-  clerkUserId              String                    @unique
-  email                    String                    @unique
-  name                     String
-  avatarUrl                String?
-  createdAt                DateTime                  @default(now()) @db.Timestamptz
-  updatedAt                DateTime                  @updatedAt @db.Timestamptz
-  ownedGrants              Grant[]                   @relation("GrantOwner")
-  createdGrants            Grant[]                   @relation("GrantCreator")
-  uploadedDocuments        Document[]                @relation("DocumentUploader")
-  activities               Activity[]                @relation("ActivityActor")
-}
+  id                String       @id @default(uuid()) @db.Uuid
+  clerkUserId       String       @unique
+  organizationId    String       @db.Uuid
+  createdAt         DateTime     @default(now()) @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @db.Timestamptz
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  ownedGrants       Grant[]      @relation("GrantOwner")
+  createdGrants     Grant[]      @relation("GrantCreator")
+  uploadedDocuments Document[]   @relation("DocumentUploader")
+  activities        Activity[]   @relation("ActivityActor")
 
-model OnboardingClaim {
-  id                   String    @id @default(uuid()) @db.Uuid
-  clerkUserId          String    @unique
-  name                 String
-  slug                 String    @unique
-  clerkOrgId           String?   @unique
-  createLeaseToken     String?   @unique
-  createLeaseExpiresAt DateTime? @db.Timestamptz
-  createdAt            DateTime  @default(now()) @db.Timestamptz
+  @@index([organizationId])
 }
 
 model Funder {

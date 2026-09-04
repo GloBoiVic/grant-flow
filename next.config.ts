@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Clerk development webhooks use a localtunnel *.loca.lt origin during local verification.
-  allowedDevOrigins: ["*.loca.lt"],
+  // Local development tunnels may use a *.loca.lt origin during local verification.
+  allowedDevOrigins: ["*.loca.lt", "127.0.0.1"],
   /* config options here */
 };
 

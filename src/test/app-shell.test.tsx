@@ -2,9 +2,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { usePathnameMock, useClerkMock } = vi.hoisted(() => ({
+const { usePathnameMock, useClerkMock, useUserMock } = vi.hoisted(() => ({
   usePathnameMock: vi.fn(),
   useClerkMock: vi.fn(),
+  useUserMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ usePathname: usePathnameMock }));
@@ -28,6 +29,7 @@ vi.mock("next/link", async () => {
 });
 vi.mock("@clerk/nextjs", () => ({
   useClerk: () => useClerkMock(),
+  useUser: () => useUserMock(),
 }));
 
 import type { ShellIdentityDto } from "@/lib/queries/shell-identity";
@@ -35,10 +37,6 @@ import { AppShell } from "@/components/layout/app-shell";
 
 const identity: ShellIdentityDto = {
   organizationName: "Grant Makers",
-  userName: "Jane Q. Doe",
-  userEmail: "jane@example.com",
-  userAvatarUrl: null,
-  userInitials: "JD",
 };
 
 function installDomPolyfills(): void {
@@ -74,6 +72,10 @@ describe("AppShell composition", () => {
       openOrganizationProfile: vi.fn(),
       openUserProfile: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+    });
+    useUserMock.mockReturnValue({
+      isLoaded: true,
+      user: { fullName: "Jane Q. Doe", username: null, imageUrl: null, primaryEmailAddress: { emailAddress: "jane@example.com" } },
     });
   });
 

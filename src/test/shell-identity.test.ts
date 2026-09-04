@@ -1,24 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { organizationFindUniqueMock, userFindUniqueMock } = vi.hoisted(() => ({ organizationFindUniqueMock: vi.fn(), userFindUniqueMock: vi.fn() }));
+const { organizationFindUniqueMock } = vi.hoisted(() => ({ organizationFindUniqueMock: vi.fn() }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/prisma", () => ({ prisma: { organization: { findUnique: organizationFindUniqueMock }, user: { findUnique: userFindUniqueMock } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { organization: { findUnique: organizationFindUniqueMock } } }));
 
 import type { AuthorizationContext } from "@/lib/clerk/authorization";
-import { getShellIdentity, ShellIdentityProjectionMissingError } from "@/lib/queries/shell-identity";
+import { getShellIdentity, ShellOrganizationMissingError } from "@/lib/queries/shell-identity";
 
-const authorization: AuthorizationContext = { clerkUserId: "clerk-user", clerkOrgId: "clerk-org", userId: "local-user", organizationId: "local-org", role: "org:member" };
+const authorization: AuthorizationContext = {
+  clerkUserId: "clerk-user",
+  userId: "local-user",
+  organizationId: "local-org",
+};
 
 describe("getShellIdentity", () => {
-  it("reads display projections by resolved local ids", async () => {
+  it("reads only the authorized local organization", async () => {
     organizationFindUniqueMock.mockResolvedValue({ name: "Grant Makers" });
-    userFindUniqueMock.mockResolvedValue({ name: "Jane Q. Doe", email: "jane@example.com", avatarUrl: null });
-    await expect(getShellIdentity(authorization)).resolves.toEqual({ organizationName: "Grant Makers", userName: "Jane Q. Doe", userEmail: "jane@example.com", userAvatarUrl: null, userInitials: "JD" });
+
+    await expect(getShellIdentity(authorization)).resolves.toEqual({ organizationName: "Grant Makers" });
+    expect(organizationFindUniqueMock).toHaveBeenCalledWith({
+      where: { id: "local-org" },
+      select: { name: true },
+    });
   });
 
-  it("fails closed when either projection is missing", async () => {
+  it("fails when the authorized organization is missing", async () => {
     organizationFindUniqueMock.mockResolvedValue(null);
-    userFindUniqueMock.mockResolvedValue(null);
-    await expect(getShellIdentity(authorization)).rejects.toBeInstanceOf(ShellIdentityProjectionMissingError);
+
+    await expect(getShellIdentity(authorization)).rejects.toBeInstanceOf(ShellOrganizationMissingError);
   });
 });

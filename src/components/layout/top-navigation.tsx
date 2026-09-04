@@ -24,7 +24,7 @@ export function TopNavigation({ identity, sidebarCollapsed, children }: TopNavig
         <MobileNavigation organizationName={identity.organizationName} />
         {children ?? (pathname === "/grants" ? <GrantsSearch /> : <span className="truncate text-sm font-medium">{identity.organizationName}</span>)}
       </div>
-      <AccountMenu identity={identity} />
+      <AccountMenu />
     </header>
   );
 }

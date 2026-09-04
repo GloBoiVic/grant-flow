@@ -9,24 +9,13 @@ const { resolveAuthorizationMock, redirectMock } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("@/lib/clerk/authorization", () => ({
-  resolveAuthorization: resolveAuthorizationMock,
-}));
+vi.mock("@/lib/clerk/authorization", () => ({ resolveAuthorization: resolveAuthorizationMock }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
-vi.mock("@/components/auth/projection-pending-retry", () => ({
-  default: () => <button type="button" data-testid="retry">Check again</button>,
-}));
 vi.mock("@/components/auth/organization-onboarding-form", () => ({
   default: () => <form data-testid="organization-onboarding" />,
 }));
+vi.mock("@clerk/nextjs", () => ({ UserButton: () => <div data-testid="user-button" /> }));
 
-// Stub Clerk account/organization controls so the page can render without a
-// Clerk provider; we only assert the page itself never composes shell chrome.
-vi.mock("@clerk/nextjs", () => ({
-  UserButton: () => <div data-testid="user-button" />,
-}));
-
-import AccessPage from "@/app/(authenticated)/access/page";
 import OrganizationPage from "@/app/(authenticated)/organization/page";
 
 const SHELL_CHROME_QUERIES = [
@@ -36,29 +25,23 @@ const SHELL_CHROME_QUERIES = [
   () => screen.queryByRole("navigation", { name: "Primary navigation" }),
 ] as const;
 
-describe("shell exclusion from /access and /organization", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+describe("shell exclusion from organization onboarding", () => {
+  beforeEach(() => vi.clearAllMocks());
 
-  it("renders the access page without any shell chrome", async () => {
-    resolveAuthorizationMock.mockResolvedValue({ status: "projection-pending" });
-    render(await AccessPage());
-
-    expect(screen.getByRole("heading", { name: "Getting things ready" })).toBeInTheDocument();
-    for (const query of SHELL_CHROME_QUERIES) {
-      expect(query()).not.toBeInTheDocument();
-    }
-  });
-
-  it("renders constrained onboarding without any shell chrome", async () => {
-    resolveAuthorizationMock.mockResolvedValue({ status: "no-active-organization" });
+  it("renders constrained onboarding without shell chrome", async () => {
+    resolveAuthorizationMock.mockResolvedValue({ status: "missing-local-user" });
     render(await OrganizationPage());
 
-    expect(screen.getByRole("heading", { name: "Choose an organization" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create your organization" })).toBeInTheDocument();
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
-    for (const query of SHELL_CHROME_QUERIES) {
-      expect(query()).not.toBeInTheDocument();
-    }
+    expect(screen.getByTestId("organization-onboarding")).toBeInTheDocument();
+    for (const query of SHELL_CHROME_QUERIES) expect(query()).not.toBeInTheDocument();
+  });
+
+  it("redirects an already-local user to the dashboard", async () => {
+    resolveAuthorizationMock.mockResolvedValue({ status: "authenticated" });
+
+    await expect(OrganizationPage()).rejects.toThrow("REDIRECT:/dashboard");
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard");
   });
 });

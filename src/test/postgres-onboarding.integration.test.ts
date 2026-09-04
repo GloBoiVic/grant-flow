@@ -4,36 +4,34 @@ import { promisify } from "node:util";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-vi.mock("server-only", () => ({}));
-vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PrismaClient } from "@/generated/prisma/client";
-import {
-  acquireOnboardingLeaseWithDb,
-  finalizeOnboardingLeaseWithDb,
-  renewOnboardingLeaseWithDb,
-} from "@/lib/clerk/onboarding";
+
+vi.mock("server-only", () => ({}));
+const authMock = vi.hoisted(() => vi.fn());
+vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
 
 /**
  * Opt-in integration gate. GRANTFLOW_TEST_DATABASE_ADMIN_URL must point at a
- * disposable PostgreSQL server/database owner. The test creates a new database,
- * applies every checked-in migration, and uses two independent Prisma clients.
+ * disposable PostgreSQL server/database owner. Each test database receives
+ * the clean local-tenancy baseline before the real onboarding action runs.
  */
 const enabled = Boolean(process.env.GRANTFLOW_TEST_DATABASE_ADMIN_URL);
-const execFileAsync = promisify(execFile);
 const describePostgres = describe.skipIf(!enabled);
+const execFileAsync = promisify(execFile);
 const lifecycleTimeoutMs = 120_000;
 
-let databaseUrl = "";
 let testDatabaseName = "";
+let databaseUrl = "";
 let admin: Pool | undefined;
-let left: PrismaClient | undefined;
-let right: PrismaClient | undefined;
+let db: PrismaClient | undefined;
+let appPrisma: typeof import("@/lib/prisma").prisma | undefined;
+let createFirstOrganization: typeof import("@/app/(authenticated)/organization/actions").createFirstOrganization;
+let currentClerkUser = "";
 
 function databaseName(): string {
-  return `grantflow_test_${randomUUID().replaceAll("-", "")}`;
+  return `grantflow_onboarding_test_${randomUUID().replaceAll("-", "")}`;
 }
 
 function withDatabase(url: string, name: string): string {
@@ -43,11 +41,10 @@ function withDatabase(url: string, name: string): string {
   return parsed.toString();
 }
 
-describePostgres("fresh PostgreSQL onboarding lease integration", () => {
+describePostgres("fresh PostgreSQL local onboarding", () => {
   async function cleanup(): Promise<void> {
     const errors: unknown[] = [];
-
-    for (const client of [left, right]) {
+    for (const client of [appPrisma, db]) {
       if (!client) continue;
       try {
         await client.$disconnect();
@@ -55,8 +52,8 @@ describePostgres("fresh PostgreSQL onboarding lease integration", () => {
         errors.push(error);
       }
     }
-    left = undefined;
-    right = undefined;
+    appPrisma = undefined;
+    db = undefined;
 
     if (admin && testDatabaseName) {
       try {
@@ -65,7 +62,6 @@ describePostgres("fresh PostgreSQL onboarding lease integration", () => {
         errors.push(error);
       }
     }
-
     if (admin) {
       try {
         await admin.end();
@@ -74,10 +70,7 @@ describePostgres("fresh PostgreSQL onboarding lease integration", () => {
       }
     }
     admin = undefined;
-
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "PostgreSQL onboarding integration cleanup failed");
-    }
+    if (errors.length > 0) throw new AggregateError(errors, "PostgreSQL onboarding cleanup failed");
   }
 
   beforeAll(async () => {
@@ -93,17 +86,15 @@ describePostgres("fresh PostgreSQL onboarding lease integration", () => {
         env: { ...process.env, DATABASE_URL: databaseUrl },
         timeout: lifecycleTimeoutMs,
       });
-
-      left = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
-      right = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+      process.env.DATABASE_URL = databaseUrl;
+      db = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+      appPrisma = (await import("@/lib/prisma")).prisma;
+      ({ createFirstOrganization } = await import("@/app/(authenticated)/organization/actions"));
     } catch (setupError) {
       try {
         await cleanup();
       } catch (cleanupError) {
-        throw new AggregateError(
-          [setupError, cleanupError],
-          "PostgreSQL onboarding integration setup and cleanup failed",
-        );
+        throw new AggregateError([setupError, cleanupError], "PostgreSQL onboarding setup and cleanup failed");
       }
       throw setupError;
     }
@@ -111,35 +102,38 @@ describePostgres("fresh PostgreSQL onboarding lease integration", () => {
 
   afterAll(cleanup, lifecycleTimeoutMs);
 
-  it("enforces lease ownership and expiry across independent clients", async () => {
-    const leftClient = left;
-    const rightClient = right;
-    if (!leftClient || !rightClient) throw new Error("PostgreSQL onboarding clients were not initialized");
+  beforeEach(async () => {
+    if (!db) throw new Error("PostgreSQL onboarding client was not initialized");
+    await db.user.deleteMany();
+    await db.organization.deleteMany();
 
-    const claim = await leftClient.onboardingClaim.create({
-      data: { clerkUserId: `user_${randomUUID()}`, name: "Integration Org", slug: `integration-${randomUUID()}` },
-    });
+    authMock.mockReset();
+    currentClerkUser = `clerk-race-${randomUUID()}`;
+    authMock.mockResolvedValue({ userId: currentClerkUser });
+  });
 
-    const [first, second] = await Promise.all([
-      acquireOnboardingLeaseWithDb(leftClient, claim),
-      acquireOnboardingLeaseWithDb(rightClient, claim),
+  it("converges concurrent first-user writes on one User and Organization", async () => {
+    const results = await Promise.all([
+      createFirstOrganization({ name: "First submitted name" }),
+      createFirstOrganization({ name: "Second submitted name" }),
     ]);
-    expect([first.status, second.status].sort()).toEqual(["acquired", "busy"]);
-    const owner = first.status === "acquired" ? first : second;
-    if (owner.status !== "acquired") throw new Error("expected one lease owner");
-    const staleToken = owner.leaseToken;
 
-    await leftClient.onboardingClaim.update({
-      where: { id: claim.id },
-      data: { createLeaseExpiresAt: new Date(Date.now() - 1) },
-    });
-    expect(await renewOnboardingLeaseWithDb(rightClient, claim.id, staleToken)).toBe(false);
-    expect(await finalizeOnboardingLeaseWithDb(rightClient, claim.id, staleToken, "org_stale")).toBeNull();
+    expect(results.filter((result) => result.success)).toHaveLength(2);
+    const first = results[0];
+    const second = results[1];
+    if (!first?.success || !second?.success) return;
+    expect(new Set([first.organizationId, second.organizationId]).size).toBe(1);
+    expect([first.status, second.status].sort()).toEqual(["created", "existing"]);
+    expect(await db!.user.count({ where: { clerkUserId: currentClerkUser } })).toBe(1);
+    expect(await db!.organization.count()).toBe(1);
+  });
 
-    const recovered = await acquireOnboardingLeaseWithDb(rightClient, claim);
-    expect(recovered.status).toBe("acquired");
-    if (recovered.status !== "acquired") return;
-    expect(await finalizeOnboardingLeaseWithDb(rightClient, claim.id, recovered.leaseToken, "org_recovered")).toBe("org_recovered");
-    await expect(leftClient.onboardingClaim.findUnique({ where: { id: claim.id } })).resolves.toMatchObject({ clerkOrgId: "org_recovered" });
+  it("returns the existing tenant on a later request without renaming it", async () => {
+    const first = await createFirstOrganization({ name: "Original name" });
+    const second = await createFirstOrganization({ name: "Ignored rename" });
+
+    expect(first).toMatchObject({ success: true, status: "created" });
+    expect(second).toMatchObject({ success: true, status: "existing" });
+    expect(await db!.organization.findFirst({ select: { name: true } })).toEqual({ name: "Original name" });
   });
 });

@@ -3,22 +3,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useClerkMock } = vi.hoisted(() => ({
+const { useClerkMock, useUserMock } = vi.hoisted(() => ({
   useClerkMock: vi.fn(),
+  useUserMock: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ useClerk: useClerkMock }));
+vi.mock("@clerk/nextjs", () => ({ useClerk: useClerkMock, useUser: useUserMock }));
 
-import type { ShellIdentityDto } from "@/lib/queries/shell-identity";
 import { AccountMenu } from "@/components/layout/account-menu";
-
-const identity: ShellIdentityDto = {
-  organizationName: "Grant Makers",
-  userName: "Jane Q. Doe",
-  userEmail: "jane@example.com",
-  userAvatarUrl: null,
-  userInitials: "JD",
-};
 
 function installDomPolyfills(): void {
   if (!window.ResizeObserver) {
@@ -28,9 +20,7 @@ function installDomPolyfills(): void {
       disconnect(): void {}
     };
   }
-  if (!window.PointerEvent) {
-    window.PointerEvent = window.MouseEvent as unknown as typeof PointerEvent;
-  }
+  if (!window.PointerEvent) window.PointerEvent = window.MouseEvent as unknown as typeof PointerEvent;
   if (!window.matchMedia) {
     window.matchMedia = ((query: string) => ({
       matches: false,
@@ -48,14 +38,23 @@ function installDomPolyfills(): void {
 describe("AccountMenu", () => {
   beforeEach(() => {
     installDomPolyfills();
+    useUserMock.mockReturnValue({
+      isLoaded: true,
+      user: {
+        fullName: "Jane Q. Doe",
+        username: null,
+        imageUrl: null,
+        primaryEmailAddress: { emailAddress: "jane@example.com" },
+      },
+    });
     useClerkMock.mockReturnValue({
       openUserProfile: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
     });
   });
 
-  it("displays the projected user name, email, and initials in the trigger", () => {
-    render(<AccountMenu identity={identity} />);
+  it("displays current Clerk user profile data in the trigger", () => {
+    render(<AccountMenu />);
 
     const trigger = screen.getByRole("button", { name: /Open account menu/ });
     expect(trigger).toHaveTextContent("Jane Q. Doe");
@@ -63,9 +62,17 @@ describe("AccountMenu", () => {
     expect(trigger).toHaveTextContent("JD");
   });
 
-  it("opens the account menu without organization profile or member-management controls", async () => {
+  it("uses a safe fallback while Clerk profile data is loading", () => {
+    useUserMock.mockReturnValue({ isLoaded: false, user: null });
+
+    render(<AccountMenu />);
+
+    expect(screen.getByRole("button", { name: /Open account menu/ })).toHaveTextContent("GrantFlow user");
+  });
+
+  it("opens the account menu without organization controls", async () => {
     const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
+    render(<AccountMenu />);
 
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
 
@@ -77,10 +84,10 @@ describe("AccountMenu", () => {
 
   it("calls openUserProfile when Profile is selected", async () => {
     const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
+    render(<AccountMenu />);
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
-
     await user.click(await screen.findByText("Profile"));
+
     expect(useClerkMock().openUserProfile).toHaveBeenCalledTimes(1);
   });
 
@@ -92,15 +99,13 @@ describe("AccountMenu", () => {
     });
 
     const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
+    render(<AccountMenu />);
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
-
     await user.click(await screen.findByText("Sign out"));
+
     expect(useClerkMock().signOut).toHaveBeenCalledWith({ redirectUrl: "/login" });
     expect(screen.getByText("Signing out…")).toBeInTheDocument();
-
-    const signOutItem = screen.getByRole("menuitem", { name: /Signing out/ });
-    expect(signOutItem).toHaveAttribute("data-disabled");
+    expect(screen.getByRole("menuitem", { name: /Signing out/ })).toHaveAttribute("data-disabled");
 
     resolveSignOut();
     await waitFor(() => expect(useClerkMock().signOut).toHaveBeenCalledTimes(1));
@@ -113,7 +118,7 @@ describe("AccountMenu", () => {
     });
 
     const user = userEvent.setup();
-    render(<AccountMenu identity={identity} />);
+    render(<AccountMenu />);
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
     await user.click(await screen.findByText("Sign out"));
 

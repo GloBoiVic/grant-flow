@@ -2,19 +2,16 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { resolveIdentityProjection } from "@/lib/clerk/projections";
 import { getClerkSessionState } from "@/lib/clerk/session";
-import { isRecognizedClerkRole, isRoleAtLeast, type ClerkRole } from "@/lib/clerk/roles";
+import { prisma } from "@/lib/prisma";
 
 export type AuthorizationContext = {
   clerkUserId: string;
-  clerkOrgId: string;
   organizationId: string;
   userId: string;
-  role: ClerkRole;
 };
 
-export type AuthorizationFailureCode = "UNAUTHENTICATED" | "NO_ACTIVE_ORGANIZATION" | "PROJECTION_MISSING" | "ROLE_MISMATCH" | "INSUFFICIENT_ROLE";
+export type AuthorizationFailureCode = "UNAUTHENTICATED" | "MISSING_LOCAL_USER";
 
 export class AuthorizationError extends Error {
   constructor(readonly code: AuthorizationFailureCode) {
@@ -25,50 +22,45 @@ export class AuthorizationError extends Error {
 
 export type AuthorizationResolution =
   | { status: "authenticated"; context: AuthorizationContext }
-  | { status: "unauthenticated" | "no-active-organization" | "projection-pending" | "role-mismatch" | "insufficient-role" };
+  | { status: "unauthenticated" | "missing-local-user" };
 
-export async function resolveAuthorization(minimumRole?: ClerkRole): Promise<AuthorizationResolution> {
+export async function resolveAuthorization(): Promise<AuthorizationResolution> {
   const session = await getClerkSessionState();
   if (!session.authenticated) return { status: "unauthenticated" };
-  if (!session.orgId) return { status: "no-active-organization" };
-  if (!isRecognizedClerkRole(session.orgRole)) return { status: "role-mismatch" };
-  if (minimumRole && !isRecognizedClerkRole(minimumRole)) return { status: "role-mismatch" };
-  const projection = await resolveIdentityProjection(session.userId, session.orgId);
-  if (projection.status !== "ready") return { status: "projection-pending" };
-  if (minimumRole && !isRoleAtLeast(session.orgRole, minimumRole)) return { status: "insufficient-role" };
-  return { status: "authenticated", context: { clerkUserId: session.userId, clerkOrgId: session.orgId, userId: projection.projection.userId, organizationId: projection.projection.organizationId, role: session.orgRole } };
+  const user = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+    select: { id: true, organizationId: true },
+  });
+  if (!user) return { status: "missing-local-user" };
+  return { status: "authenticated", context: { clerkUserId: session.userId, userId: user.id, organizationId: user.organizationId } };
 }
 
 const failureCodes: Record<Exclude<AuthorizationResolution["status"], "authenticated">, AuthorizationFailureCode> = {
   unauthenticated: "UNAUTHENTICATED",
-  "no-active-organization": "NO_ACTIVE_ORGANIZATION",
-  "projection-pending": "PROJECTION_MISSING",
-  "role-mismatch": "ROLE_MISMATCH",
-  "insufficient-role": "INSUFFICIENT_ROLE",
+  "missing-local-user": "MISSING_LOCAL_USER",
 };
 
-export async function requireAuthorization(minimumRole?: ClerkRole): Promise<AuthorizationContext> {
-  const result = await resolveAuthorization(minimumRole);
+export async function requireAuthorization(): Promise<AuthorizationContext> {
+  const result = await resolveAuthorization();
   if (result.status === "authenticated") return result.context;
   throw new AuthorizationError(failureCodes[result.status]);
 }
 
-export async function requireAuthorizationOrRedirect(minimumRole?: ClerkRole): Promise<AuthorizationContext> {
+export async function requireAuthorizationOrRedirect(): Promise<AuthorizationContext> {
   try {
-    return await requireAuthorization(minimumRole);
+    return await requireAuthorization();
   } catch (error) {
     if (!(error instanceof AuthorizationError)) throw error;
     if (error.code === "UNAUTHENTICATED") redirect("/login");
-    if (error.code === "NO_ACTIVE_ORGANIZATION") redirect("/organization");
-    redirect("/access");
+    redirect("/organization");
   }
 }
 
 export type AuthorizationFailure = { success: false; error: "Unauthorized"; code: AuthorizationFailureCode };
 
-export async function authorizeAction(minimumRole?: ClerkRole): Promise<AuthorizationContext | AuthorizationFailure> {
+export async function authorizeAction(): Promise<AuthorizationContext | AuthorizationFailure> {
   try {
-    return await requireAuthorization(minimumRole);
+    return await requireAuthorization();
   } catch (error) {
     if (error instanceof AuthorizationError) return { success: false, error: "Unauthorized", code: error.code };
     throw error;

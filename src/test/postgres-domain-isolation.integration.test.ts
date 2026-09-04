@@ -11,8 +11,8 @@ import { PrismaClient } from "@/generated/prisma/client";
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-// Control the signed Clerk session per scenario so the real authorization +
-// projection path runs against the disposable database.
+// Control the signed Clerk session per scenario so the real authorization path
+// resolves local User tenancy against the disposable database.
 const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@clerk/nextjs/server", () => ({ auth: authMock }));
 
@@ -62,18 +62,18 @@ function withDatabase(url: string, name: string): string {
   return parsed.toString();
 }
 
-function setSession(userId: string | null, orgId: string | null, orgRole: string | null): void {
-  authMock.mockResolvedValue({ userId, orgId, orgRole });
+function setSession(userId: string | null): void {
+  authMock.mockResolvedValue({ userId });
 }
 
 async function seedDatabase(client: PrismaClient): Promise<void> {
-  const orgA = await client.organization.create({ data: { clerkOrgId: "org_aaaa", name: "Org A", slug: `org-a-${randomUUID()}` } });
-  const orgB = await client.organization.create({ data: { clerkOrgId: "org_bbbb", name: "Org B", slug: `org-b-${randomUUID()}` } });
+  const orgA = await client.organization.create({ data: { name: "Org A" } });
+  const orgB = await client.organization.create({ data: { name: "Org B" } });
   orgAId = orgA.id;
   orgBId = orgB.id;
 
-  const userA = await client.user.create({ data: { clerkUserId: "user_aaaa", email: `a-${randomUUID()}@example.com`, name: "User A" } });
-  const userB = await client.user.create({ data: { clerkUserId: "user_bbbb", email: `b-${randomUUID()}@example.com`, name: "User B" } });
+  const userA = await client.user.create({ data: { clerkUserId: "user_aaaa", organizationId: orgA.id } });
+  const userB = await client.user.create({ data: { clerkUserId: "user_bbbb", organizationId: orgB.id } });
   userAId = userA.id;
 
   const funderA = await client.funder.create({ data: { organizationId: orgA.id, name: "Org A Funder", type: "FOUNDATION" } });
@@ -190,7 +190,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("does not list another organization's funders or soft-deleted funders", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await funderQueries!.listFunders();
     const ids = result.items.map((f) => f.id);
     expect(ids).toContain(funderAId);
@@ -199,7 +199,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("does not list another organization's grants or soft-deleted grants", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await grantQueries!.listGrants();
     const ids = result.items.map((g) => g.id);
     expect(ids).toContain(grantAId);
@@ -208,7 +208,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("applies server-side search and status filters within the organization", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await grantQueries!.listGrants({
       q: "status",
       statuses: ["Qualified"],
@@ -222,18 +222,18 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("returns another organization's grant and a soft-deleted grant as missing on read", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     expect(await grantQueries!.getGrant(grantBId)).toBeNull();
     expect(await grantQueries!.getGrant(grantASoftDeletedId)).toBeNull();
   });
 
   it("does not expose another organization's activities", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     expect(await activityQueries!.listActivities({ grantId: grantBId })).toEqual([]);
   });
 
   it("cannot edit another organization's grant (no change, no activity)", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const before = await db!.grant.findUnique({ where: { id: grantBId }, select: { title: true } });
     const result = await actions!.editGrant({ grantId: grantBId, title: "Hacked title" });
     expect(result.success).toBe(false);
@@ -243,7 +243,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("cannot status-change another organization's grant (no change, no activity)", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.changeGrantStatus({ grantId: grantBId, status: "Awarded" });
     expect(result).toEqual({ success: false, error: "Grant not found." });
     const grant = await db!.grant.findUnique({ where: { id: grantBId }, select: { status: true } });
@@ -252,7 +252,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("cannot create a grant attached to another organization's funder", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const before = await db!.grant.count({ where: { organizationId: orgAId } });
     const beforeActivities = await db!.activity.count();
     const result = await actions!.createGrant({ funderId: funderBId, title: "Attempt", status: "Research" });
@@ -262,7 +262,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("cannot re-attach a grant to another organization's funder via edit", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.editGrant({ grantId: grantAId, funderId: funderBId });
     expect(result).toEqual({ success: false, error: "Grant or funder not found." });
     const grant = await db!.grant.findUnique({ where: { id: grantAId }, select: { funderId: true } });
@@ -271,7 +271,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("cannot create a grant attached to a soft-deleted funder", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const before = await db!.grant.count({ where: { organizationId: orgAId } });
     const result = await actions!.createGrant({ funderId: funderASoftDeletedId, title: "Attempt", status: "Research" });
     expect(result).toEqual({ success: false, error: "Funder not found." });
@@ -279,7 +279,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("produces no domain change or activity for invalid funder details", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const beforeFunders = await db!.funder.count({ where: { organizationId: orgAId } });
     const beforeActivities = await db!.activity.count();
     const result = await actions!.createFunder({ name: "", type: "FOUNDATION" });
@@ -289,7 +289,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("rejects server-owned fields and invalid grant details with no domain change or activity", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const beforeGrants = await db!.grant.count({ where: { organizationId: orgAId } });
     const beforeActivities = await db!.activity.count();
     const serverOwned = await actions!.createGrant({ funderId: funderAId, title: "Grant", status: "Research", organizationId: orgBId });
@@ -301,7 +301,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("produces no domain change or activity when unauthenticated", async () => {
-    setSession(null, null, null);
+    setSession(null);
     const beforeFunders = await db!.funder.count();
     const beforeActivities = await db!.activity.count();
     const result = await actions!.createFunder({ name: "No Auth", type: "FOUNDATION" });
@@ -311,7 +311,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("creates a funder and its append-only funder_created activity atomically", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.createFunder({ name: "Fresh Funder", type: "CORPORATION", website: "https://example.com" });
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -329,7 +329,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("creates a grant and its grant_created activity atomically with actor and metadata", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.createGrant({
       funderId: funderAId,
       title: "Program Grant",
@@ -357,7 +357,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("edits a grant and appends a grant_updated activity atomically", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.editGrant({ grantId: grantAId, title: "Updated Title" });
     expect(result.success).toBe(true);
     const grant = await db!.grant.findUnique({ where: { id: grantAId }, select: { title: true } });
@@ -368,7 +368,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("changes grant status and appends an append-only status_changed activity atomically", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const result = await actions!.changeGrantStatus({ grantId: grantAId, status: "Awarded" });
     expect(result.success).toBe(true);
     const grant = await db!.grant.findUnique({ where: { id: grantAId }, select: { status: true } });
@@ -384,7 +384,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
   });
 
   it("writes no activity for a same-status submission", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+    setSession("user_aaaa");
     const before = await db!.activity.count({ where: { grantId: grantAStatusId } });
     const result = await actions!.changeGrantStatus({ grantId: grantAStatusId, status: "Qualified" });
     expect(result.success).toBe(true);
@@ -393,16 +393,16 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
     expect(await db!.activity.count({ where: { grantId: grantAStatusId } })).toBe(before);
   });
 
-  it("permits funder and grant creation for org:member", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:member");
+  it("permits funder and grant creation for the local User", async () => {
+    setSession("user_aaaa");
     const funder = await actions!.createFunder({ name: "Member Funder", type: "OTHER" });
     expect(funder.success).toBe(true);
     const grant = await actions!.createGrant({ funderId: funderAId, title: "Member Grant", status: "Writing" });
     expect(grant.success).toBe(true);
   });
 
-  it("permits funder creation for org:admin", async () => {
-    setSession("user_aaaa", "org_aaaa", "org:admin");
+  it("permits funder creation for another request by the same local User", async () => {
+    setSession("user_aaaa");
     const result = await actions!.createFunder({ name: "Admin Funder", type: "OTHER" });
     expect(result.success).toBe(true);
   });

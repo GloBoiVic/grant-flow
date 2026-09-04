@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "GrantStatus" AS ENUM ('Research', 'Qualified', 'Planning', 'Writing', 'InternalReview', 'Submitted', 'Pending', 'Awarded', 'Declined', 'Reporting', 'Closed');
 
@@ -7,9 +10,7 @@ CREATE TYPE "FunderType" AS ENUM ('FOUNDATION', 'FAMILY_FUND', 'CORPORATION', 'O
 -- CreateTable
 CREATE TABLE "Organization" (
     "id" UUID NOT NULL,
-    "clerkOrgId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ NOT NULL,
 
@@ -20,25 +21,11 @@ CREATE TABLE "Organization" (
 CREATE TABLE "User" (
     "id" UUID NOT NULL,
     "clerkUserId" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "avatarUrl" TEXT,
+    "organizationId" UUID NOT NULL,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "OnboardingClaim" (
-    "id" UUID NOT NULL,
-    "clerkUserId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
-    "clerkOrgId" TEXT,
-    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "OnboardingClaim_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -137,6 +124,7 @@ CREATE TABLE "Tag" (
     "id" UUID NOT NULL,
     "organizationId" UUID NOT NULL,
     "name" TEXT NOT NULL,
+    "normalizedName" TEXT NOT NULL,
     "color" TEXT,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMPTZ,
@@ -169,25 +157,10 @@ CREATE TABLE "ImportStaging" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Organization_clerkOrgId_key" ON "Organization"("clerkOrgId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Organization_slug_key" ON "Organization"("slug");
-
--- CreateIndex
 CREATE UNIQUE INDEX "User_clerkUserId_key" ON "User"("clerkUserId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OnboardingClaim_clerkUserId_key" ON "OnboardingClaim"("clerkUserId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OnboardingClaim_slug_key" ON "OnboardingClaim"("slug");
-
--- CreateIndex
-CREATE UNIQUE INDEX "OnboardingClaim_clerkOrgId_key" ON "OnboardingClaim"("clerkOrgId");
+CREATE INDEX "User_organizationId_idx" ON "User"("organizationId");
 
 -- CreateIndex
 CREATE INDEX "Funder_organizationId_idx" ON "Funder"("organizationId");
@@ -241,10 +214,13 @@ CREATE INDEX "Activity_actorId_idx" ON "Activity"("actorId");
 CREATE INDEX "Tag_organizationId_idx" ON "Tag"("organizationId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Tag_organizationId_name_key" ON "Tag"("organizationId", "name");
+CREATE UNIQUE INDEX "Tag_organizationId_normalizedName_key" ON "Tag"("organizationId", "normalizedName");
 
 -- CreateIndex
 CREATE INDEX "ImportStaging_organizationId_importBatchId_idx" ON "ImportStaging"("organizationId", "importBatchId");
+
+-- AddForeignKey
+ALTER TABLE "User" ADD CONSTRAINT "User_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "Funder" ADD CONSTRAINT "Funder_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
