@@ -84,3 +84,25 @@ Final review corrections:
 - Validation: **PASS** — 157 tests passed / 28 skipped; lint, TypeScript, production build, and `git diff --check` passed.
 - Review: **PASS** with no Critical or Important findings.
 - Preserved all application/runtime assets, tests, Prisma code, screenshots, mock data, configuration, Git history, `dispatch/COMPLETED.md` history, and the pre-existing `next.config.ts` and `.codegraph/.gitignore` changes. No runtime behavior was modified.
+
+## replace-clerk-organization-tenancy — Replace Clerk Organization Tenancy
+
+- Critical workstream implemented and fast-forward merged to `main` at commit `51965e3`.
+- Replaced Clerk Organization tenancy with local `User.clerkUserId` → `User.organizationId`
+  authority, a clean Prisma baseline, strict atomic first-user onboarding, and preserved
+  organization-scoped domain behavior.
+- Removed Clerk Organization, role, membership, projection, claim, lease, activation, and
+  webhook machinery, including the webhook route and signing-secret example. Clerk remains
+  responsible for authentication and current-user profile display only.
+- Added `/.codegraph/` to `.gitignore`. The explicitly requested `next.config.ts` change is
+  tracked in the merge.
+- Validation evidence: focused onboarding tests **9 passed**; disposable PostgreSQL onboarding,
+  domain-isolation, and tag suites **26 passed**; TypeScript, ESLint, and `git diff --check`
+  passed. Remediation chains R001 and R002 both completed with BUILD → VALIDATE → REVIEW PASS.
+- Browser acceptance: after the R002 Server Action export fix, the user confirmed successful
+  Clerk authentication, local organization onboarding, and arrival at `/dashboard`.
+- Known non-blocking limitations: Clerk/Cloudflare authentication can be browser-dependent;
+  independent webpack reruns encountered the documented Next compiled-webpack `null.hash`
+  tooling failure, while the recorded post-fix webpack build passed.
+- No push or deployment was performed. `dispatch/ACTIVE.md` is cleared; the user-deleted
+  `CLAUDE.md` remains absent and pre-existing unrelated changes were preserved.
