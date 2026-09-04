@@ -74,3 +74,13 @@ Final review corrections:
 - Validation evidence: full Vitest **157 passed / 28 skipped**; disposable PostgreSQL **20 passed**; ESLint, TypeScript, production build, and `git diff --check` passed. No schema, migration, dependency, or application-code changes were made during this documentation closure.
 - No one-off reports were deleted; no reports were inventoried for deletion because none required cleanup beyond the flat dispatch files.
 - Completion receipt: `memory.md` was saved and the write was verified successfully. No commit, push, merge, deployment, or other Git-state change was performed.
+
+## soloflow-operating-model — Adopt SoloFlow operating model
+
+- Implemented and fast-forward merged to `main` at commit `f13dd02`.
+- Replaced `AGENTS.md` with concise GrantFlow-specific operating guidance and added `PRODUCT.md` with only durable product identity, users, core problem, MVP goal, and product boundaries.
+- Adopted `dispatch/ACTIVE.md`, `dispatch/COMPLETED.md`, and the `dispatch/workstreams/soloflow-operating-model/` workstream structure with canonical plan, task, validation, and review receipts.
+- Removed `CURRENT.md`, `memory.md`, the 31-file `context/` hierarchy, and the seven superseded flat dispatch artifacts.
+- Validation: **PASS** — 157 tests passed / 28 skipped; lint, TypeScript, production build, and `git diff --check` passed.
+- Review: **PASS** with no Critical or Important findings.
+- Preserved all application/runtime assets, tests, Prisma code, screenshots, mock data, configuration, Git history, `dispatch/COMPLETED.md` history, and the pre-existing `next.config.ts` and `.codegraph/.gitignore` changes. No runtime behavior was modified.
