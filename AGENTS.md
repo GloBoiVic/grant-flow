@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-GrantFlow is a grant portfolio management platform for nonprofit grant professionals. It manages grant opportunities, funders, documents, activity history, and portfolio insight. It is not a donor CRM, accounting software, AI grant writer, or general nonprofit management platform. Durable product identity and boundaries live in `PRODUCT.md`.
+GrantFlow is a grant portfolio and grant-work management platform for nonprofit grant professionals. It manages grant opportunities, funders, deadlines, working notes, grant-specific drafting, documents, activity and revision history, exports, and portfolio insight. It is not a donor CRM, accounting system, general-purpose word processor, AI grant writer, or general nonprofit management platform. Durable product identity and boundaries live in `PRODUCT.md`.
 
 ## Source of truth
 
@@ -17,7 +17,7 @@ GrantFlow is a grant portfolio management platform for nonprofit grant professio
 - Read the active plan and assigned task before work. Complete one task at a time and make only approved, task-relevant changes.
 - Preserve unrelated application/runtime assets, tests, configuration, user changes, and the user-deleted `CLAUDE.md`.
 - Do not dispatch work, change branches, alter Git history, or edit another role's artifact. Do not mark incomplete work complete.
-- Prefer the smallest solution. Do not introduce abstractions, infrastructure, documents, or data models for hypothetical future needs. Avoid speculative features and technologies; keep GrantFlow focused on replacing spreadsheet-based grant tracking.
+- Prefer the smallest solution. Do not introduce abstractions, infrastructure, documents, or data models for hypothetical future needs. Avoid speculative features and technologies; keep GrantFlow focused on replacing fragmented grant-tracking and grant-work workflows with one grant-specific source of truth.
 
 ## SoloFlow workflow
 
