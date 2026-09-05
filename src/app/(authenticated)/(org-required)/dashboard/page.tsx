@@ -1,10 +1,7 @@
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { DashboardContent } from "@/components/dashboard/dashboard-content";
+import { getDashboard } from "@/lib/queries/dashboard";
 
-export default function DashboardPage(): React.ReactNode {
-  return (
-    <FeaturePlaceholder
-      title="Dashboard"
-      description="Your portfolio overview will show funding health, attention items, active opportunities, and approaching deadlines here."
-    />
-  );
+export default async function DashboardPage(): Promise<React.ReactNode> {
+  const dto = await getDashboard();
+  return <DashboardContent dto={dto} />;
 }

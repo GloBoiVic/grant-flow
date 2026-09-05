@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
-import DashboardPage from "@/app/(authenticated)/(org-required)/dashboard/page";
 import DeadlinesPage from "@/app/(authenticated)/(org-required)/deadlines/page";
 
 describe("FeaturePlaceholder", () => {
@@ -26,10 +25,7 @@ describe("FeaturePlaceholder", () => {
   });
 });
 
-describe.each([
-  ["Dashboard", DashboardPage, "Dashboard"],
-  ["Deadlines", DeadlinesPage, "Deadlines"],
-])("%s placeholder route", (_name, Page, title) => {
+describe.each([["Deadlines", DeadlinesPage, "Deadlines"]] as const)("%s placeholder route", (_name, Page, title) => {
   it("renders the honest placeholder with no fabricated records or values", () => {
     const { container } = render(<Page />);
 
