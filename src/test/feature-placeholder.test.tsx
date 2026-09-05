@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
 import DashboardPage from "@/app/(authenticated)/(org-required)/dashboard/page";
 import DeadlinesPage from "@/app/(authenticated)/(org-required)/deadlines/page";
-import ImportPage from "@/app/(authenticated)/(org-required)/import/page";
 
 describe("FeaturePlaceholder", () => {
   it("renders an honest Planned badge, title, and not-available copy", () => {
@@ -30,7 +29,6 @@ describe("FeaturePlaceholder", () => {
 describe.each([
   ["Dashboard", DashboardPage, "Dashboard"],
   ["Deadlines", DeadlinesPage, "Deadlines"],
-  ["Import", ImportPage, "Import"],
 ])("%s placeholder route", (_name, Page, title) => {
   it("renders the honest placeholder with no fabricated records or values", () => {
     const { container } = render(<Page />);
