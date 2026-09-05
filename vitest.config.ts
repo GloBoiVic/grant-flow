@@ -13,6 +13,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "server-only": path.resolve(__dirname, "./src/test/server-only.ts"),
+      // Vitest's Bun runner does not expose Zod 4's ESM namespace export.
+      zod: path.resolve(__dirname, "./node_modules/zod/index.cjs"),
     },
   },
 });

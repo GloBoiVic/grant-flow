@@ -40,7 +40,6 @@ model Organization {
   documents      Document[]
   activities     Activity[]
   tags           Tag[]
-  importStaging  ImportStaging[]
 }
 
 model User {
@@ -197,20 +196,4 @@ model GrantTag {
   tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@id([grantId, tagId])
-}
-
-model ImportStaging {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String       @db.Uuid
-  importBatchId    String
-  rowIndex         Int
-  rawData          Json         @db.JsonB
-  mappedData       Json?        @db.JsonB
-  validationErrors Json?        @db.JsonB
-  status           String
-  createdAt        DateTime     @default(now()) @db.Timestamptz
-  importedAt       DateTime?    @db.Timestamptz
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-
-  @@index([organizationId, importBatchId])
 }
