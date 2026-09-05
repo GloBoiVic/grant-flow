@@ -106,3 +106,13 @@ Final review corrections:
   tooling failure, while the recorded post-fix webpack build passed.
 - No push or deployment was performed. `dispatch/ACTIVE.md` is cleared; the user-deleted
   `CLAUDE.md` remains absent and pre-existing unrelated changes were preserved.
+
+## portfolio-import — Bounded Excel Portfolio Import
+
+- Classification: Feature, Branch: solo/portfolio-import → main at 2b750ff, Base: 7bbae64
+- Implemented scope: Bounded .xlsx import at /import with ephemeral client state, server-side parsing via sheetjs, deterministic worksheet selection (required Funder/Type/Current Status), 5 MiB/1,000-row bounds, structural skipping, explicit source-to-domain mapping (amounts, dates, award timeframe, designation, county, notes), placeholder-aware title derivation (Funder — Designation fallback), and organization-scoped atomic creation of Funders/Grants/Activity with revalidation of /grants and /funders. No durable staging, queues, or generic mapping.
+- Remediations: R001 formula-only candidate rows invalid (structural vs candidate), R002 required "-" placeholders invalid, R003 optional Grant Title, R004 Grant Name primary with Grant Title alias (both map to Grant.title, placeholder-aware, Grant Name wins), R005 empty-column preview overflow (ColumnN filter + HeaderList truncation after 12 with Show more, fixes A1:XFD 16k header sheet).
+- Validation & Review: T001-T003 DONE_WITH_CONCERNS, R001 VALIDATE PASS REVIEW FAIL → R002-005 VALIDATE PASS REVIEW PASS, final state READY_FOR_USER. Focused parser/mapping/configuration/migration/action/UI tests plus opt-in PostgreSQL integration (GRANTFLOW_TEST_DATABASE_ADMIN_URL) all passed; lint, TypeScript, Prisma validate, next build --webpack, git diff --check passed; browser checks limited by Clerk auth (human verified).
+- Migrations: 20260904000000_local_tenancy_baseline (already on main) + 20260904010000_remove_import_staging (drops ImportStaging) — applied to local grantflow (postgresql://vike@127.0.0.1:5432/grantflow) via migrate deploy; 18 grants / 17 funders imported from data/mock-grant-data.xlsx (A1:XFD35, Grant Title: None placeholder → derived titles).
+- Closing note: Trackers are funder-centric but headers vary; dual Grant Name/Title support with placeholder fallback is backward-compatible. Preview now compact. Human upload verified post-merge. No unresolved Critical/Important findings; only deferred MINOR Award Timeframe UI omission (persisted/DTO present).
+- Merge: Added 40 files (+4714/-30), data/mock-grant-data.xlsx 18KB→237KB (with ColumnN formatting and Grant Title), solo/portfolio-import merged via --no-ff to main.
