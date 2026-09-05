@@ -125,3 +125,19 @@ Final review corrections:
 - Validation & Review: dashboard-dates 8, dashboard-queries 12, dashboard-page 15 (41 total) plus full suite 195 passed/31 skipped (5 PG suites skipped without GRANTFLOW_TEST_DATABASE_ADMIN_URL); lint, TypeScript, Prisma validate, git diff --check passed; next build Turbopack globals.css pooled-process spawn is pre-existing env limitation, honestly disclosed and not code regression (tsc/prisma gates pass). Browser validation not run locally (Clerk/DB unavailable; jsdom accessibility/href covers).
 - Closing note: UTC-vs-local-midnight limitation remains explicit per PLAN; Deadline View and /deadlines remain deferred.
 - Merge: Added 16 files (+2779/-14) on solo/portfolio-dashboard (8dd313a) merged via --no-ff to main at 95a7d95.
+
+## refine-dashboard-visuals — Bounded Dashboard Visual Refinement
+
+- Classification: Small, Branch: main (direct), Base: 95a7d95 → HEAD at 4fb0271
+- Implemented scope: Visual-only refinement of already-complete /dashboard via `src/components/dashboard/dashboard-content.tsx` preserving all query/DTO/org/totals/pipeline/pre-submission/overdue/dueIn7/next30/nearest5/status/links/UTC helpers. No schema/deps/analytics.
+- Visual refinements:
+  - Portfolio totals: `h-1` top accents (`primary/20`, `accent-foreground/20`, `warning/30`, `success/30`), brand/money icon tints (`primary/10`, `warning/10`), hierarchy icon on heading, `text-label`/`text-metric`/`tracking-metric` with existing tokens.
+  - Needs attention: urgency now honest red — top `h-1 bg-destructive` + `border-destructive/20` + `destructive-soft/40` wash when attention; Overdue retains `destructive-soft` when overdue; Due within 7 days background changed per feedback from `urgency-due` light red to neutral `bg-card` (R002) while keeping red icon/count foreground (`destructive`) — red = urgency without overwhelming fill.
+  - Upcoming/Status headers: `bg-muted/20` wash + `bg-card border shadow-sm` icon pills (`CalendarDays`/`Layers`), scannable rows (`Funder · Sep 11, 2026` + `Badge` status colors, `hover:bg-muted/40`).
+  - As of: `As of 2026-09-05 · UTC` (ISO + UTC) → `As of September 5, 2026` (user-local `Intl.DateTimeFormat(undefined, long)` with noon anchor, no UTC) per feedback (R003).
+  - Two-column `lg:grid-cols-5` for Upcoming 3/5 + Status 2/5 density, `rounded-xl border bg-card shadow-sm`, `focus-visible` rings, responsive/bars hidden <sm preserved.
+- Remediations: R001 generic flat + amber→red + distinctive cards/headers, R002 Due within 7 days red background removed (arrow feedback), R003 As of UTC→local date (long month to avoid duplicate Sep regex).
+- Validation: lint PASS, `tsc --noEmit` PASS, `git diff --check` PASS, focused dashboard-page 15 passed, full 195 passed /31 skipped (5 PG suites skipped), honest Local Host unavailable disclosure throughout.
+- Review: R001/R002/R003 each PASS, zero unresolved Critical/Important.
+- Closing note: Dashboard still honors "Preserve exactly" list (totals, pipeline, pre-submission, overdue/next7/next30/nearest5/status, /grants links, UTC helpers, schema). Visual identity is calm, professional, information-dense via tokens only.
+- Commit: 4fb0271 on main — 7 files +543/-120.

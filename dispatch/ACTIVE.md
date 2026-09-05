@@ -2,4 +2,4 @@
 
 No active workstream.
 
-Last completed: portfolio-dashboard → main at 95a7d95 (solo/portfolio-dashboard) — Portfolio Dashboard: totals, attention, upcoming (5, deadline asc id asc, 30d), and status breakdown (11 zero-filled) with UTC date-only helpers and org-scoped aggregation. No schema change.
+Last completed: refine-dashboard-visuals → main at 4fb0271 — Bounded dashboard visual refinement: hierarchy, red urgency, distinctive cards, local As of (R001/R002/R003). 195 tests passed /31 skipped.
