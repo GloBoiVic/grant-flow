@@ -3,16 +3,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createGrantMock, editGrantMock, changeStatusMock, assignTagMock, createTagMock, removeTagMock, pushMock, replaceMock, pathnameMock } = vi.hoisted(() => ({ createGrantMock: vi.fn(), editGrantMock: vi.fn(), changeStatusMock: vi.fn(), assignTagMock: vi.fn(), createTagMock: vi.fn(), removeTagMock: vi.fn(), pushMock: vi.fn(), replaceMock: vi.fn(), pathnameMock: vi.fn(() => "/grants") }));
+const { createGrantMock, editGrantMock, changeStatusMock, assignTagMock, createTagMock, removeTagMock, pushMock, replaceMock, refreshMock, pathnameMock } = vi.hoisted(() => ({ createGrantMock: vi.fn(), editGrantMock: vi.fn(), changeStatusMock: vi.fn(), assignTagMock: vi.fn(), createTagMock: vi.fn(), removeTagMock: vi.fn(), pushMock: vi.fn(), replaceMock: vi.fn(), refreshMock: vi.fn(), pathnameMock: vi.fn(() => "/grants") }));
 vi.mock("@/app/(authenticated)/(org-required)/grants/actions", () => ({ createGrant: createGrantMock, editGrant: editGrantMock, changeGrantStatus: changeStatusMock }));
 vi.mock("@/app/(authenticated)/(org-required)/grants/tag-actions", () => ({ assignTagToGrant: assignTagMock, createTag: createTagMock, removeTagFromGrant: removeTagMock }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, replace: replaceMock, refresh: vi.fn() }), usePathname: pathnameMock, useSearchParams: () => new URLSearchParams(window.location.search) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, replace: replaceMock, refresh: refreshMock }), usePathname: pathnameMock, useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("@/components/layout/account-menu", () => ({ AccountMenu: () => null }));
 vi.mock("@/components/layout/mobile-navigation", () => ({ MobileNavigation: () => null }));
 
 import { GrantDetailSheet } from "@/components/grants/grant-detail-sheet";
 import { GrantsPage } from "@/components/grants/grants-page";
 import { GrantForm } from "@/components/grants/grant-form";
+import { GrantWorkspace } from "@/components/grants/grant-workspace";
 import { TopNavigation } from "@/components/layout/top-navigation";
 import type { FunderDto } from "@/types/funder";
 import type { GrantDetailDto } from "@/types/grant";
@@ -42,6 +43,115 @@ describe("grant UI states", () => {
     expect(changeStatusMock).toHaveBeenCalledWith({ grantId: "grant-1", status: "Qualified" });
   });
 
+  it("renders the complete stacked workspace with explicit record fields and newest-first activity", () => {
+    const completeGrant: GrantDetailDto = {
+      ...grant,
+      title: "A very long housing stability grant title that still wraps safely",
+      status: "Internal Review",
+      currency: "CAD",
+      amountRequested: "1250.50",
+      amountAwarded: "900.00",
+      deadline: "2026-09-30",
+      decisionDate: "2026-11-15",
+      awardTimeframe: "Within 90 days",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget\nConfirm match funding",
+      notes: "Review attachments\nConfirm match funding",
+      tags: [{ id: "tag-1", name: "Housing" }],
+      activities: [
+        { id: "activity-new", action: "status_changed", description: "Moved to internal review", metadata: null, actorId: "user-1", createdAt: "2026-08-22T12:00:00.000Z" },
+        { id: "activity-old", action: "grant_created", description: "Created grant", metadata: null, actorId: "user-1", createdAt: "2026-08-20T12:00:00.000Z" },
+      ],
+      funder: { ...funder, name: "Local Foundation", type: "FAMILY_FUND", website: "https://foundation.example/funder" },
+    };
+
+    render(<GrantWorkspace grant={completeGrant} funders={[funder]} tags={tags} />);
+
+    expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toEqual([
+      "A very long housing stability grant title that still wraps safely",
+      "Overview",
+      "Tags",
+      "Notes",
+      "Activity",
+    ]);
+    expect(screen.getByText("Family Fund")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "https://foundation.example/funder" })).toHaveAttribute("target", "_blank");
+    expect(screen.getByText("CAD CA$1,250.50")).toBeInTheDocument();
+    expect(screen.getByText("CAD CA$900.00")).toBeInTheDocument();
+    expect(screen.getByText("Sep 30, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Nov 15, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Within 90 days")).toBeInTheDocument();
+    expect(screen.getByText("Local County")).toBeInTheDocument();
+    expect(screen.getByText(/Submit the final budget/)).toBeInTheDocument();
+    expect(screen.getByText(/Review attachments/)).toBeInTheDocument();
+    expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
+    expect(screen.queryByText("FAMILY_FUND")).not.toBeInTheDocument();
+    expect(screen.getByText("Moved to internal review")).toBeInTheDocument();
+    expect(screen.getByText("Created grant")).toBeInTheDocument();
+    const activityList = screen.getByRole("list", { name: "Grant activity" });
+    expect(activityList.textContent?.indexOf("Moved to internal review")).toBeLessThan(activityList.textContent?.indexOf("Created grant") ?? -1);
+    expect(screen.getByRole("link", { name: "Back to Grants" })).toHaveAttribute("href", "/grants");
+  });
+
+  it("keeps sparse records honest and exposes labeled workspace actions", () => {
+    render(<GrantWorkspace grant={{ ...grant, title: "Sparse grant", amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null, designation: null, countyServed: null, nextSteps: null, notes: null, tags: [], activities: [], funder: { ...funder, website: null } }} funders={[funder]} tags={[]} />);
+
+    expect(screen.getByRole("heading", { name: "Sparse grant" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Notes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
+    expect(screen.getByText("No notes recorded yet.")).toBeInTheDocument();
+    expect(screen.getByText("No tags assigned yet.")).toBeInTheDocument();
+    expect(screen.getByText("No activity recorded.")).toBeInTheDocument();
+    expect(screen.getByText("Funder website: —")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit grant" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Change grant status" })).toHaveValue("Research");
+  });
+
+  it("refreshes the complete server-owned workspace after a real status change", async () => {
+    changeStatusMock.mockResolvedValue({ success: true, data: { ...grant, status: "Qualified", tags: [], activities: [] } });
+    const user = userEvent.setup();
+    render(<GrantWorkspace grant={grant} funders={[funder]} tags={tags} />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Change grant status" }), "Qualified");
+    await user.click(screen.getByRole("button", { name: "Change status" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Status updated successfully.");
+    expect(refreshMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh for a same-status no-op", async () => {
+    changeStatusMock.mockResolvedValue({ success: true, data: { ...grant, status: grant.status, tags: [], activities: [] } });
+    const user = userEvent.setup();
+    render(<GrantWorkspace grant={grant} funders={[funder]} tags={tags} />);
+
+    await user.click(screen.getByRole("button", { name: "Change status" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Status updated successfully.");
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it("closes the existing form and refreshes after an edit without adopting its partial DTO", async () => {
+    editGrantMock.mockResolvedValue({ success: true, data: { ...grant, title: "Updated grant", tags: [], activities: [] } });
+    const user = userEvent.setup();
+    render(<GrantWorkspace grant={{ ...grant, tags: [tags[0]] }} funders={[funder]} tags={tags} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit grant" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(editGrantMock).toHaveBeenCalledOnce());
+    expect(refreshMock).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("heading", { name: "Edit grant" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
+    expect(screen.getByText("Created grant Housing Stability Pilot.")).toBeInTheDocument();
+  });
+
+  it("adds an encoded full-workspace link to the portfolio Sheet", () => {
+    render(<GrantDetailSheet grant={{ ...grant, id: "grant/1" }} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+
+    expect(screen.getByRole("link", { name: "Open full grant" })).toHaveAttribute("href", "/grants/grant%2F1");
+  });
+
   it("assigns an active tag from the keyboard-friendly picker", async () => {
     assignTagMock.mockResolvedValue({ success: true, data: [tags[0]] });
     const user = userEvent.setup();
@@ -50,7 +160,7 @@ describe("grant UI states", () => {
     await user.click(screen.getByRole("button", { name: "Add tag" }));
     expect(assignTagMock).toHaveBeenCalledWith({ grantId: "grant-1", tagId: "tag-1" });
     expect(await screen.findByRole("status")).toHaveTextContent("Housing added.");
-    expect(screen.getByText("Housing")).toBeInTheDocument();
+    expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
   });
 
   it("creates and assigns a tag inline, and exposes removal by name", async () => {

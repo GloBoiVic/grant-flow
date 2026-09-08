@@ -136,6 +136,7 @@ export async function editGrant(input: unknown): Promise<EditGrantResult> {
   });
   if (!result) return invalid("Grant or funder not found.");
   revalidatePath("/grants");
+  revalidatePath(`/grants/${parsed.data.grantId}`);
   return { success: true, data: grantDto(result.grant, { id: result.activity.id, action: result.activity.action, description: result.activity.description, metadata: null, actorId: result.activity.actorId, createdAt: result.activity.createdAt.toISOString() }) };
 }
 
@@ -158,5 +159,6 @@ export async function changeGrantStatus(input: unknown): Promise<ChangeGrantStat
     return { success: true, data: grantDto(result.grant, null) };
   }
   revalidatePath("/grants");
+  revalidatePath(`/grants/${parsed.data.grantId}`);
   return { success: true, data: grantDto(result.grant, { id: result.activity.id, action: result.activity.action, description: result.activity.description, metadata: result.activity.metadata as Record<string, unknown> | null, actorId: result.activity.actorId, createdAt: result.activity.createdAt.toISOString() }) };
 }

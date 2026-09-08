@@ -49,7 +49,13 @@ let funderASoftDeletedId = "";
 let grantAId = "";
 let grantBId = "";
 let grantASoftDeletedId = "";
+let grantASoftDeletedFunderId = "";
+let grantAMismatchedFunderId = "";
+let grantAInternalReviewId = "";
 let grantAStatusId = "";
+let tagAId = "";
+let tagASoftDeletedId = "";
+let tagBId = "";
 
 function databaseName(): string {
   return `grantflow_domain_test_${randomUUID().replaceAll("-", "")}`;
@@ -86,7 +92,24 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
   funderASoftDeletedId = funderASoftDeleted.id;
 
   const grantA = await client.grant.create({
-    data: { organizationId: orgA.id, funderId: funderA.id, title: "Org A Grant", status: "Research", ownerId: userA.id, createdById: userA.id },
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Org A Grant",
+      status: "Research",
+      currency: "CAD",
+      amountRequested: "1250.50",
+      amountAwarded: "900.00",
+      deadline: new Date("2026-09-30T00:00:00.000Z"),
+      decisionDate: new Date("2026-11-15T00:00:00.000Z"),
+      awardTimeframe: "Within 90 days",
+      designation: "Housing stability",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget",
+      notes: "Confirm match funding\nReview attachments",
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
   });
   const grantB = await client.grant.create({
     data: { organizationId: orgB.id, funderId: funderB.id, title: "Org B Grant", status: "Writing", ownerId: userB.id, createdById: userB.id },
@@ -97,10 +120,78 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
   const grantAStatus = await client.grant.create({
     data: { organizationId: orgA.id, funderId: funderA.id, title: "Status Grant", status: "Qualified", ownerId: userA.id, createdById: userA.id },
   });
+  const grantASoftDeletedFunder = await client.grant.create({
+    data: { organizationId: orgA.id, funderId: funderASoftDeleted.id, title: "Soft Funder Grant", status: "Research", ownerId: userA.id, createdById: userA.id },
+  });
+  const grantAMismatchedFunder = await client.grant.create({
+    data: { organizationId: orgA.id, funderId: funderB.id, title: "Mismatched Funder Grant", status: "Research", ownerId: userA.id, createdById: userA.id },
+  });
+  const grantAInternalReview = await client.grant.create({
+    data: { organizationId: orgA.id, funderId: funderA.id, title: "Internal Review Grant", status: "InternalReview", ownerId: userA.id, createdById: userA.id },
+  });
   grantAId = grantA.id;
   grantBId = grantB.id;
   grantASoftDeletedId = grantASoftDeleted.id;
+  grantASoftDeletedFunderId = grantASoftDeletedFunder.id;
+  grantAMismatchedFunderId = grantAMismatchedFunder.id;
+  grantAInternalReviewId = grantAInternalReview.id;
   grantAStatusId = grantAStatus.id;
+
+  const tagA = await client.tag.create({ data: { organizationId: orgA.id, name: "Housing", normalizedName: "housing" } });
+  const tagASoftDeleted = await client.tag.create({ data: { organizationId: orgA.id, name: "Archived", normalizedName: "archived", deletedAt: new Date("2026-08-01T00:00:00.000Z") } });
+  const tagB = await client.tag.create({ data: { organizationId: orgB.id, name: "Housing", normalizedName: "housing" } });
+  tagAId = tagA.id;
+  tagASoftDeletedId = tagASoftDeleted.id;
+  tagBId = tagB.id;
+  await client.grantTag.createMany({
+    data: [
+      { grantId: grantA.id, tagId: tagA.id },
+      { grantId: grantA.id, tagId: tagASoftDeleted.id },
+      { grantId: grantA.id, tagId: tagB.id },
+    ],
+  });
+  await client.activity.createMany({
+    data: [
+      {
+        id: "00000000-0000-0000-0000-000000000001",
+        organizationId: orgA.id,
+        grantId: grantA.id,
+        action: "grant_created",
+        description: "Created grant",
+        metadata: { source: "test" },
+        actorId: userA.id,
+        createdAt: new Date("2026-08-20T12:00:00.000Z"),
+      },
+      {
+        id: "00000000-0000-0000-0000-000000000002",
+        organizationId: orgA.id,
+        grantId: grantA.id,
+        action: "grant_updated",
+        description: "Updated grant details",
+        actorId: userA.id,
+        createdAt: new Date("2026-08-21T12:00:00.000Z"),
+      },
+      {
+        id: "00000000-0000-0000-0000-000000000003",
+        organizationId: orgA.id,
+        grantId: grantA.id,
+        action: "note_added",
+        description: "Reviewed notes",
+        metadata: { section: "notes" },
+        actorId: userA.id,
+        createdAt: new Date("2026-08-21T12:00:00.000Z"),
+      },
+      {
+        id: "00000000-0000-0000-0000-000000000004",
+        organizationId: orgB.id,
+        grantId: grantA.id,
+        action: "cross_org_event",
+        description: "Should not be visible",
+        actorId: userB.id,
+        createdAt: new Date("2026-08-22T12:00:00.000Z"),
+      },
+    ],
+  });
 }
 
 describePostgres("fresh PostgreSQL domain tenant isolation", () => {
@@ -225,6 +316,51 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
     setSession("user_aaaa");
     expect(await grantQueries!.getGrant(grantBId)).toBeNull();
     expect(await grantQueries!.getGrant(grantASoftDeletedId)).toBeNull();
+    expect(await grantQueries!.getGrant(grantASoftDeletedFunderId)).toBeNull();
+    expect(await grantQueries!.getGrant(grantAMismatchedFunderId)).toBeNull();
+  });
+
+  it("loads complete fields, active local tags, and newest-first local Activity as a serializable DTO", async () => {
+    setSession("user_aaaa");
+    const dto = await grantQueries!.getGrant(grantAId);
+
+    expect(dto).not.toBeNull();
+    expect(dto).toMatchObject({
+      id: grantAId,
+      title: "Org A Grant",
+      status: "Research",
+      currency: "CAD",
+      deadline: "2026-09-30",
+      decisionDate: "2026-11-15",
+      awardTimeframe: "Within 90 days",
+      designation: "Housing stability",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget",
+      notes: "Confirm match funding\nReview attachments",
+      tags: [{ id: tagAId, name: "Housing" }],
+      funder: { id: funderAId, name: "Org A Funder", type: "FOUNDATION" },
+    });
+    expect(dto?.tags.map((tag) => tag.id)).not.toContain(tagASoftDeletedId);
+    expect(dto?.tags.map((tag) => tag.id)).not.toContain(tagBId);
+    expect(typeof dto?.amountRequested).toBe("string");
+    expect(typeof dto?.amountAwarded).toBe("string");
+    expect(Number(dto?.amountRequested)).toBe(1250.5);
+    expect(Number(dto?.amountAwarded)).toBe(900);
+    expect(dto?.activities.map((activity) => activity.id)).toEqual([
+      "00000000-0000-0000-0000-000000000003",
+      "00000000-0000-0000-0000-000000000002",
+      "00000000-0000-0000-0000-000000000001",
+    ]);
+    expect(dto?.activities.map((activity) => activity.description)).not.toContain("Should not be visible");
+    expect(JSON.parse(JSON.stringify(dto))).toEqual(dto);
+  });
+
+  it("maps the persisted InternalReview enum to the display status", async () => {
+    setSession("user_aaaa");
+    const dto = await grantQueries!.getGrant(grantAInternalReviewId);
+
+    expect(dto?.status).toBe("Internal Review");
+    expect(JSON.stringify(dto)).not.toContain("InternalReview");
   });
 
   it("does not expose another organization's activities", async () => {
@@ -263,11 +399,12 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
 
   it("cannot re-attach a grant to another organization's funder via edit", async () => {
     setSession("user_aaaa");
+    const beforeActivities = await db!.activity.count({ where: { grantId: grantAId } });
     const result = await actions!.editGrant({ grantId: grantAId, funderId: funderBId });
     expect(result).toEqual({ success: false, error: "Grant or funder not found." });
     const grant = await db!.grant.findUnique({ where: { id: grantAId }, select: { funderId: true } });
     expect(grant?.funderId).toBe(funderAId);
-    expect(await db!.activity.count({ where: { grantId: grantAId } })).toBe(0);
+    expect(await db!.activity.count({ where: { grantId: grantAId } })).toBe(beforeActivities);
   });
 
   it("cannot create a grant attached to a soft-deleted funder", async () => {

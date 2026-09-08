@@ -133,6 +133,140 @@ describe("organization-scoped domain queries", () => {
     }));
   });
 
+  it("loads and serializes the complete scoped Grant detail", async () => {
+    mocks.grantFindFirst.mockResolvedValue({
+      id: "grant-1",
+      funderId: "funder-1",
+      title: "Housing Program",
+      status: "InternalReview",
+      currency: "USD",
+      amountRequested: { toString: () => "1250.50" },
+      amountAwarded: { toString: () => "900.00" },
+      deadline: new Date("2026-09-30T00:00:00.000Z"),
+      decisionDate: new Date("2026-11-15T00:00:00.000Z"),
+      awardTimeframe: "Within 90 days",
+      designation: "Housing stability",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget",
+      notes: "Confirm match funding\nReview attachments",
+      ownerId: "user-1",
+      createdById: "user-1",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-21T00:00:00.000Z"),
+      funder: {
+        id: "funder-1",
+        name: "Local Foundation",
+        type: "FOUNDATION",
+        website: "https://foundation.example",
+        createdAt: new Date("2026-08-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-02T00:00:00.000Z"),
+      },
+      grantTags: [{ tag: { id: "tag-1", name: "Housing" } }],
+      activities: [
+        {
+          id: "activity-new",
+          action: "status_changed",
+          description: "Moved to internal review",
+          metadata: { status: "InternalReview" },
+          actorId: "user-1",
+          createdAt: new Date("2026-08-22T12:00:00.000Z"),
+        },
+        {
+          id: "activity-old",
+          action: "grant_created",
+          description: "Created grant",
+          metadata: null,
+          actorId: "user-1",
+          createdAt: new Date("2026-08-20T12:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await getGrant("grant-1");
+
+    expect(result).toEqual({
+      id: "grant-1",
+      funderId: "funder-1",
+      title: "Housing Program",
+      status: "Internal Review",
+      currency: "USD",
+      amountRequested: "1250.50",
+      amountAwarded: "900.00",
+      deadline: "2026-09-30",
+      decisionDate: "2026-11-15",
+      awardTimeframe: "Within 90 days",
+      designation: "Housing stability",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget",
+      notes: "Confirm match funding\nReview attachments",
+      ownerId: "user-1",
+      createdById: "user-1",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-21T00:00:00.000Z",
+      tags: [{ id: "tag-1", name: "Housing" }],
+      funder: {
+        id: "funder-1",
+        name: "Local Foundation",
+        type: "FOUNDATION",
+        website: "https://foundation.example",
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      },
+      activities: [
+        {
+          id: "activity-new",
+          action: "status_changed",
+          description: "Moved to internal review",
+          metadata: { status: "InternalReview" },
+          actorId: "user-1",
+          createdAt: "2026-08-22T12:00:00.000Z",
+        },
+        {
+          id: "activity-old",
+          action: "grant_created",
+          description: "Created grant",
+          metadata: null,
+          actorId: "user-1",
+          createdAt: "2026-08-20T12:00:00.000Z",
+        },
+      ],
+    });
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+
+    const query = mocks.grantFindFirst.mock.calls[0][0];
+    expect(query.where).toEqual({
+      id: "grant-1",
+      organizationId: "local-org",
+      deletedAt: null,
+      funder: { organizationId: "local-org", deletedAt: null },
+    });
+    expect(query.select).toMatchObject({
+      id: true,
+      funderId: true,
+      title: true,
+      status: true,
+      currency: true,
+      amountRequested: true,
+      amountAwarded: true,
+      deadline: true,
+      decisionDate: true,
+      awardTimeframe: true,
+      designation: true,
+      countyServed: true,
+      nextSteps: true,
+      notes: true,
+      ownerId: true,
+      createdById: true,
+      createdAt: true,
+      updatedAt: true,
+      grantTags: expect.objectContaining({ where: { tag: { organizationId: "local-org", deletedAt: null } } }),
+      activities: {
+        where: { organizationId: "local-org" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      },
+    });
+  });
+
   it("scopes activity reads and serializes timestamps and metadata", async () => {
     mocks.activityFindMany.mockResolvedValue([{
       id: "activity-1",

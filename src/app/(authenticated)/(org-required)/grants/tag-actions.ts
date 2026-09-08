@@ -114,6 +114,7 @@ export async function assignTagToGrant(input: unknown): Promise<AssignTagResult>
 
   if (tags === null) return invalid(TAG_NOT_FOUND);
   revalidatePath("/grants");
+  revalidatePath(`/grants/${parsed.data.grantId}`);
   return { success: true, data: tags };
 }
 
@@ -150,5 +151,6 @@ export async function removeTagFromGrant(input: unknown): Promise<RemoveTagResul
 
   if (tags === null) return invalid(TAG_NOT_FOUND);
   revalidatePath("/grants");
+  revalidatePath(`/grants/${parsed.data.grantId}`);
   return { success: true, data: tags };
 }

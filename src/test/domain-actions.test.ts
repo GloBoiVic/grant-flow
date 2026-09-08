@@ -23,7 +23,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { changeGrantStatus, createGrant } from "@/app/(authenticated)/(org-required)/grants/actions";
+import { changeGrantStatus, createGrant, editGrant } from "@/app/(authenticated)/(org-required)/grants/actions";
 
 const authorization = { organizationId: "local-org", userId: "local-user" };
 
@@ -63,5 +63,45 @@ describe("domain Server Actions", () => {
     expect(mocks.grantUpdate).not.toHaveBeenCalled();
     expect(mocks.activityCreate).not.toHaveBeenCalled();
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("revalidates both the portfolio and exact workspace after a real status change", async () => {
+    mocks.grantFindFirst.mockResolvedValue({
+      id: "grant-1", funderId: "funder-1", title: "Grant", status: "Research", currency: "USD",
+      amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null,
+      designation: null, countyServed: null, nextSteps: null, notes: null, ownerId: "local-user", createdById: "local-user",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z"),
+      funder: { id: "funder-1", name: "Funder", type: "FOUNDATION", website: null, createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z") },
+    });
+    mocks.grantUpdate.mockResolvedValue({
+      id: "grant-1", funderId: "funder-1", title: "Grant", status: "Qualified", currency: "USD",
+      amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null,
+      designation: null, countyServed: null, nextSteps: null, notes: null, ownerId: "local-user", createdById: "local-user",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-21T00:00:00.000Z"),
+      funder: { id: "funder-1", name: "Funder", type: "FOUNDATION", website: null, createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z") },
+    });
+    mocks.activityCreate.mockResolvedValue({ id: "activity-1", action: "status_changed", description: "Changed grant status to Qualified.", metadata: {}, actorId: "local-user", createdAt: new Date("2026-08-21T00:00:00.000Z") });
+
+    await expect(changeGrantStatus({ grantId: "grant-1", status: "Qualified" })).resolves.toMatchObject({ success: true });
+
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(1, "/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(2, "/grants/grant-1");
+  });
+
+  it("revalidates both the portfolio and exact workspace after a successful edit", async () => {
+    mocks.grantFindFirst.mockResolvedValue({ id: "grant-1" });
+    mocks.grantUpdate.mockResolvedValue({
+      id: "grant-1", funderId: "funder-1", title: "Updated grant", status: "Research", currency: "USD",
+      amountRequested: null, amountAwarded: null, deadline: null, decisionDate: null, awardTimeframe: null,
+      designation: null, countyServed: null, nextSteps: null, notes: null, ownerId: "local-user", createdById: "local-user",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-21T00:00:00.000Z"),
+      funder: { id: "funder-1", name: "Funder", type: "FOUNDATION", website: null, createdAt: new Date("2026-08-20T00:00:00.000Z"), updatedAt: new Date("2026-08-20T00:00:00.000Z") },
+    });
+    mocks.activityCreate.mockResolvedValue({ id: "activity-1", action: "grant_updated", description: "Updated grant Updated grant.", metadata: null, actorId: "local-user", createdAt: new Date("2026-08-21T00:00:00.000Z") });
+
+    await expect(editGrant({ grantId: "grant-1", title: "Updated grant" })).resolves.toMatchObject({ success: true });
+
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(1, "/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(2, "/grants/grant-1");
   });
 });

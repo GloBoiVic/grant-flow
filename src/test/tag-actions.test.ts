@@ -100,7 +100,8 @@ describe("tag Server Actions", () => {
       select: { id: true },
     });
     expect(mocks.grantTagCreateMany).not.toHaveBeenCalled();
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(1, "/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(2, "/grants/grant-1");
   });
 
   it("removes idempotently without deleting an absent relation or writing Activity", async () => {
@@ -109,6 +110,7 @@ describe("tag Server Actions", () => {
     mocks.grantTagFindFirst.mockResolvedValue(null);
     await expect(removeTagFromGrant({ grantId: "grant-1", tagId: "tag-1" })).resolves.toEqual({ success: true, data: [] });
     expect(mocks.grantTagDeleteMany).not.toHaveBeenCalled();
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(1, "/grants");
+    expect(mocks.revalidatePath).toHaveBeenNthCalledWith(2, "/grants/grant-1");
   });
 });
