@@ -16,8 +16,7 @@ const groupConfig = [
     key: "overdue",
     heading: "Overdue",
     emptyMessage: "No overdue deadlines.",
-    sectionClass: "border-destructive/30",
-    headerClass: "border-b border-destructive/20 bg-destructive-soft/50",
+    sectionClass: "",
     headingClass: "text-destructive",
     rowClass: "hover:bg-destructive-soft/50",
   },
@@ -25,17 +24,15 @@ const groupConfig = [
     key: "dueSoon",
     heading: "Due in the next 7 days",
     emptyMessage: "No deadlines due in the next 7 days.",
-    sectionClass: "border-border",
-    headerClass: "border-b border-border bg-urgency-soon/20",
-    headingClass: "text-foreground",
-    rowClass: "hover:bg-urgency-soon/30",
+    sectionClass: "border-t border-border",
+    headingClass: "text-urgency-soon-fg",
+    rowClass: "hover:bg-urgency-soon/20",
   },
   {
     key: "later",
     heading: "Later in the next 30 days",
     emptyMessage: "No other pre-submission deadlines in the next 30 days.",
-    sectionClass: "border-border",
-    headerClass: "border-b border-border bg-muted/40",
+    sectionClass: "border-t border-border",
     headingClass: "text-foreground",
     rowClass: "hover:bg-muted/50",
   },
@@ -60,7 +57,7 @@ function formatAsOf(value: string): string {
 
 function DeadlineRow({ item, rowClass }: { item: DeadlineItem; rowClass: string }): React.ReactNode {
   return (
-    <li className={`group flex min-w-0 flex-col gap-2 px-4 py-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${rowClass}`}>
+    <li className={`group flex min-w-0 flex-col gap-2 px-4 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${rowClass}`}>
       <div className="min-w-0 flex-1">
         <Link
           href={`/grants?grant=${encodeURIComponent(item.id)}`}
@@ -71,10 +68,10 @@ function DeadlineRow({ item, rowClass }: { item: DeadlineItem; rowClass: string 
         <p className="mt-1 min-w-0 break-words text-sm text-muted-foreground">{item.funderName}</p>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 sm:shrink-0">
-        <time className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground" dateTime={item.deadline}>
+        <time className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground font-sans" dateTime={item.deadline}>
           {formatDeadline(item.deadline)}
         </time>
-        <Badge className={`shrink-0 ${statusClass[item.status] ?? ""}`}>{item.status}</Badge>
+        <Badge className={`shrink-0 font-sans ${statusClass[item.status] ?? ""}`}>{item.status}</Badge>
       </div>
     </li>
   );
@@ -84,56 +81,52 @@ export function DeadlineView({ dto }: { dto: DeadlineViewDto }): React.ReactNode
   const hasDeadlineRows = Object.values(dto.groups).some((group) => group.length > 0);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-title tracking-tight text-balance">Deadlines</h1>
-          <p className="mt-1 max-w-[60ch] text-sm leading-5 text-muted-foreground">
-            Review pre-submission application deadlines and the work that needs attention.
-          </p>
         </div>
         <p className="shrink-0 text-caption text-muted-foreground">As of {formatAsOf(dto.asOf)}</p>
       </header>
 
-      {dto.trackedGrantCount === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed border-border bg-card px-5 py-4 shadow-sm">
-          <p className="text-sm font-medium text-foreground">No grants tracked yet</p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            Import an existing spreadsheet at{" "}
-            <Link href="/import" className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-              /import
-            </Link>{" "}
-            or go to{" "}
-            <Link href="/grants" className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-              /grants
-            </Link>{" "}
-            to begin building the portfolio.
-          </p>
-        </div>
-      ) : !hasDeadlineRows ? (
-        <div className="mt-5 rounded-xl border border-dashed border-border bg-card px-5 py-4 shadow-sm">
-          <p className="text-sm font-medium text-foreground">No eligible pre-submission application deadlines are currently in this view.</p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            Only Research, Qualified, Planning, Writing, and Internal Review grants are included in application-deadline attention.
-          </p>
-        </div>
-      ) : null}
+      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
+        {dto.trackedGrantCount === 0 ? (
+          <div className="border-b border-border px-4 py-4">
+            <p className="text-sm font-medium text-foreground">No grants tracked yet</p>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              <Link href="/import" className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                Import a spreadsheet
+              </Link>{" "}
+              or{" "}
+              <Link href="/grants" className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                add a grant
+              </Link>{" "}
+              to get started.
+            </p>
+          </div>
+        ) : !hasDeadlineRows ? (
+          <div className="border-b border-border px-4 py-4">
+            <p className="text-sm font-medium text-foreground">No eligible deadlines are currently in view.</p>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              Deadlines here include only Research, Qualified, Planning, Writing, and Internal Review grants.
+            </p>
+          </div>
+        ) : null}
 
-      <div className="mt-6 space-y-5">
         {groupConfig.map((group) => {
           const items = dto.groups[group.key];
           const headingId = `deadline-${group.key}-heading`;
 
           return (
-            <section key={group.key} aria-labelledby={headingId} className={`overflow-hidden rounded-xl border bg-card shadow-sm ${group.sectionClass}`}>
-              <div className={`px-5 py-4 ${group.headerClass}`}>
+            <section key={group.key} aria-labelledby={headingId} className={group.sectionClass}>
+              <div className="px-4 py-5">
                 <h2 id={headingId} className={`text-h2 tracking-tight text-balance ${group.headingClass}`}>
                   {group.heading}
                 </h2>
               </div>
               <ul aria-label={`${group.heading} deadlines`} className="divide-y divide-border/70">
                 {items.length === 0 ? (
-                  <li className="px-4 py-4 text-sm text-muted-foreground">{group.emptyMessage}</li>
+                <li className="px-4 py-5 text-sm text-muted-foreground">{group.emptyMessage}</li>
                 ) : (
                   items.map((item) => <DeadlineRow key={item.id} item={item} rowClass={group.rowClass} />)
                 )}

@@ -48,10 +48,22 @@ function makeDto(overrides: Partial<DashboardDto> = {}): DashboardDto {
 }
 
 describe("DashboardContent", () => {
-  it("renders four sections with correct heading hierarchy", () => {
+  it("renders the dashboard hierarchy, as-of context, and one metrics grouping", () => {
     render(<DashboardContent dto={makeDto()} />);
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Portfolio totals" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByText(/As of September 4, 2026/)).toBeInTheDocument();
+
+    const metrics = screen.getByRole("region", { name: "Portfolio metrics" });
+    expect(within(metrics).getByText("Tracked grants")).toBeInTheDocument();
+    expect(within(metrics).getByText("Open pipeline")).toBeInTheDocument();
+    expect(within(metrics).getByText("Requested")).toBeInTheDocument();
+    expect(within(metrics).getByText("Awarded")).toBeInTheDocument();
+    expect(within(metrics).getByText("5")).toBeInTheDocument();
+    expect(within(metrics).getByText("3")).toBeInTheDocument();
+    expect(within(metrics).getByText("$1,234.5")).toBeInTheDocument();
+    expect(within(metrics).getByText("$567")).toBeInTheDocument();
+
     expect(screen.getByRole("heading", { level: 2, name: "Needs attention" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Upcoming deadlines" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Status breakdown" })).toBeInTheDocument();
@@ -59,14 +71,14 @@ describe("DashboardContent", () => {
 
   it("formats totals as USD and links tracked/open pipeline correctly", () => {
     render(<DashboardContent dto={makeDto()} />);
-    // Requested $1,234.50 and Awarded $567.00
-    expect(screen.getByText("$1,234.50")).toBeInTheDocument();
-    expect(screen.getByText("$567.00")).toBeInTheDocument();
+    // Requested $1,234.5 and Awarded $567
+    expect(screen.getByText("$1,234.5")).toBeInTheDocument();
+    expect(screen.getByText("$567")).toBeInTheDocument();
 
-    const trackedLink = screen.getByRole("link", { name: "View all grants →" });
+    const trackedLink = screen.getByRole("link", { name: "View all grants" });
     expect(trackedLink).toHaveAttribute("href", "/grants");
 
-    const pipelineLink = screen.getByRole("link", { name: "View open pipeline →" });
+    const pipelineLink = screen.getByRole("link", { name: "View open pipeline" });
     const href = pipelineLink.getAttribute("href") ?? "";
     expect(href.startsWith("/grants?")).toBe(true);
     const url = new URL(href, "http://localhost");
@@ -85,28 +97,34 @@ describe("DashboardContent", () => {
     expect(url.searchParams.has("deadlineWindow")).toBe(false);
   });
 
+  it("keeps meaningful amount decimals without trailing zeroes", () => {
+    render(
+      <DashboardContent
+        dto={makeDto({ totals: { trackedGrants: 5, openPipeline: 3, requestedTotal: "100.00", awardedTotal: "100.25", currency: "USD" } })}
+      />,
+    );
+
+    const metrics = screen.getByRole("region", { name: "Portfolio metrics" });
+    expect(within(metrics).getByText("$100")).toHaveClass("font-normal", "text-muted-foreground");
+    expect(within(metrics).getByText("$100.25")).toHaveClass("font-normal", "text-muted-foreground");
+    expect(within(metrics).queryByText("$100.00")).not.toBeInTheDocument();
+  });
+
   it("shows overdue and due-within counts and honest continuation link", () => {
     render(<DashboardContent dto={makeDto()} />);
-    expect(screen.getByText("Overdue: 1")).toBeInTheDocument();
-    expect(screen.getByText("Oldest overdue: 1 day")).toBeInTheDocument();
-    expect(screen.getByText("Due within 7 days: 2")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Review pre-submission deadlines →" });
-    expect(link).toBeInTheDocument();
-    const href = link.getAttribute("href") ?? "";
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.getAll("status")).toEqual([
-      "Research",
-      "Qualified",
-      "Planning",
-      "Writing",
-      "Internal Review",
-    ]);
-    // Must not be labeled as View overdue / View due in 7 days
-    expect(screen.queryByRole("link", { name: /View overdue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /View due in 7 days/i })).not.toBeInTheDocument();
-    // No invented params
-    expect(url.searchParams.has("overdue")).toBe(false);
-    expect(url.searchParams.has("dueWithin")).toBe(false);
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    const attentionMetrics = within(attention).getByText("Overdue").closest("dl");
+    expect(attentionMetrics).toHaveClass("sm:grid-cols-2", "sm:gap-0", "sm:divide-x", "sm:divide-border");
+    expect(attentionMetrics?.children).toHaveLength(2);
+    expect(within(attention).getByText("Overdue")).toBeInTheDocument();
+    expect(within(attention).getAllByText("1", { selector: "dd" })).toHaveLength(1);
+    expect(within(attention).queryByText(/Oldest overdue/)).not.toBeInTheDocument();
+    expect(within(attention).getByText("Due within 7 days")).toBeInTheDocument();
+    expect(within(attention).getAllByText("2", { selector: "dd" })).toHaveLength(1);
+
+    const link = screen.getByRole("link", { name: "View deadlines" });
+    expect(screen.getAllByRole("link", { name: "View deadlines" })).toHaveLength(1);
+    expect(link).toHaveAttribute("href", "/deadlines");
   });
 
   it("renders upcoming deadlines with ?grant= links, badge, and honest continuation", () => {
@@ -120,6 +138,7 @@ describe("DashboardContent", () => {
     // Each upcoming row links to /grants?grant=<id>
     const alphaLink = screen.getByRole("link", { name: "Alpha Grant" });
     expect(alphaLink).toHaveAttribute("href", "/grants?grant=g1");
+    expect(alphaLink.closest("li")).toHaveClass("py-4");
     const betaLink = screen.getByRole("link", { name: "Beta Grant" });
     expect(betaLink).toHaveAttribute("href", "/grants?grant=g2");
     // Deadline formatted contains year 2026 (UTC formatting)
@@ -129,17 +148,7 @@ describe("DashboardContent", () => {
     const upcomingList = screen.getByLabelText("Upcoming deadlines list");
     expect(within(upcomingList).getByText("Research")).toBeInTheDocument();
     expect(within(upcomingList).getByText("Internal Review")).toBeInTheDocument();
-    // Upcoming continuation
-    const reviewLink = screen.getByRole("link", { name: "Review grant deadlines →" });
-    expect(reviewLink).toBeInTheDocument();
-    const revUrl = new URL(reviewLink.getAttribute("href") ?? "", "http://localhost");
-    expect(revUrl.searchParams.getAll("status")).toEqual([
-      "Research",
-      "Qualified",
-      "Planning",
-      "Writing",
-      "Internal Review",
-    ]);
+    expect(screen.queryByRole("link", { name: "Review grant deadlines" })).not.toBeInTheDocument();
   });
 
   it("limits upcoming to at most 5 and ensures no overdue preview table", () => {
@@ -217,15 +226,13 @@ describe("DashboardContent", () => {
       ],
     });
     render(<DashboardContent dto={dto} />);
-    expect(screen.getAllByText("$0.00").length).toBeGreaterThanOrEqual(2);
-    // Shows next-step to /import and /grants
-    expect(screen.getByRole("link", { name: "/import" })).toHaveAttribute("href", "/import");
-    // The /grants link for next step — there are multiple /grants links, ensure at least one present
-    expect(screen.getAllByRole("link", { name: "/grants" }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("$0").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("link", { name: "Import a spreadsheet" })).toHaveAttribute("href", "/import");
+    expect(screen.getByRole("link", { name: "add a grant" })).toHaveAttribute("href", "/grants");
     // Empty state message
     expect(screen.getByText(/No grants tracked yet/)).toBeInTheDocument();
     // No amount caption when no grants? Should NOT show caption because tracked=0
-    expect(screen.queryByText("No requested/awarded amounts recorded yet.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No amounts recorded yet.")).not.toBeInTheDocument();
   });
 
   it("shows muted caption when grants exist but no amounts", () => {
@@ -233,44 +240,44 @@ describe("DashboardContent", () => {
       totals: { trackedGrants: 3, openPipeline: 2, requestedTotal: "0", awardedTotal: "0", currency: "USD" },
     });
     render(<DashboardContent dto={dto} />);
-    expect(screen.getByText("No requested/awarded amounts recorded yet.")).toBeInTheDocument();
-    // Totals still $0.00
-    expect(screen.getAllByText("$0.00")).toHaveLength(2);
+    expect(screen.getByText("No amounts recorded yet.")).toBeInTheDocument();
+    // Totals still $0
+    expect(screen.getAllByText("$0")).toHaveLength(2);
   });
 
   it("does not show amount caption when amounts exist", () => {
     render(<DashboardContent dto={makeDto()} />);
-    expect(screen.queryByText("No requested/awarded amounts recorded yet.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No amounts recorded yet.")).not.toBeInTheDocument();
   });
 
   it("shows no-attention text when both counts zero", () => {
     render(<DashboardContent dto={makeDto({ attention: { overdueCount: 0, dueIn7Count: 0, oldestOverdueDays: null } })} />);
-    expect(screen.getByText("Overdue: 0")).toBeInTheDocument();
-    expect(screen.getByText("Due within 7 days: 0")).toBeInTheDocument();
-    expect(screen.queryByText(/Oldest overdue/)).not.toBeInTheDocument();
-    expect(screen.getByText("No pre-submission application deadlines need attention.")).toBeInTheDocument();
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    expect(within(attention).getAllByText("0", { selector: "dd" })).toHaveLength(2);
+    expect(within(attention).queryByText(/Oldest overdue/)).not.toBeInTheDocument();
+    expect(within(attention).getByText("No deadlines need attention.")).toBeInTheDocument();
   });
 
-  it("renders plural oldest overdue age only for the overdue tile", () => {
+  it("does not render oldest overdue age (clean attention)", () => {
     render(<DashboardContent dto={makeDto({ attention: { overdueCount: 2, dueIn7Count: 0, oldestOverdueDays: 34 } })} />);
 
-    const age = screen.getByText("Oldest overdue: 34 days");
-    expect(age).toBeInTheDocument();
-    expect(age.parentElement).toContainElement(screen.getByText("Overdue: 2"));
-    expect(screen.getByText("Due within 7 days: 0")).toBeInTheDocument();
+    expect(screen.queryByText(/Oldest overdue/)).not.toBeInTheDocument();
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    expect(within(attention).getByText("2", { selector: "dd" })).toBeInTheDocument();
+    expect(within(attention).getByText("Due within 7 days")).toBeInTheDocument();
+    expect(within(attention).getByText("0", { selector: "dd" })).toBeInTheDocument();
   });
 
   it("does not show no-attention text when counts non-zero", () => {
     render(<DashboardContent dto={makeDto()} />);
-    expect(screen.queryByText("No pre-submission application deadlines need attention.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No deadlines need attention.")).not.toBeInTheDocument();
   });
 
   it("shows no-upcoming text when empty and keeps section visible", () => {
     render(<DashboardContent dto={makeDto({ upcoming: [] })} />);
-    expect(screen.getByText("No pre-submission deadlines in the next 30 days.")).toBeInTheDocument();
+    expect(screen.getByText("No upcoming deadlines.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upcoming deadlines" })).toBeInTheDocument();
-    // Still has continuation link
-    expect(screen.getByRole("link", { name: "Review grant deadlines →" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View deadlines" })).toHaveAttribute("href", "/deadlines");
   });
 
   it("shows all-zero breakdown counts", () => {
@@ -306,34 +313,49 @@ describe("DashboardContent", () => {
         expect(url.searchParams.has("overdue")).toBe(false);
         expect(url.searchParams.has("dueWithin")).toBe(false);
         expect(url.searchParams.has("deadlineWindow")).toBe(false);
-        // Must not link to /deadlines
-        expect(url.pathname).not.toBe("/deadlines");
       }
-      // No link points to /deadlines
-      expect(link.getAttribute("href")).not.toBe("/deadlines");
     }
-    // Ensure no link directly targets /deadlines
     const deadlinesLinks = allLinks.filter((a) => (a.getAttribute("href") ?? "") === "/deadlines");
-    expect(deadlinesLinks).toHaveLength(0);
-    // Honest continuation links exist (contain deadlines word but point to /grants)
-    expect(screen.getByRole("link", { name: "Review pre-submission deadlines →" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/grants"),
-    );
-    expect(screen.getByRole("link", { name: "Review grant deadlines →" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/grants"),
-    );
+    expect(deadlinesLinks).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "View deadlines" })).toHaveAttribute("href", "/deadlines");
   });
 
-  it("renders zero totals as $0.00 not null or em dash", () => {
+  it("uses a max-w-7xl root and narrow-safe content structure", () => {
+    const { container } = render(<DashboardContent dto={makeDto()} />);
+    expect(container.firstElementChild).toHaveClass("w-full", "max-w-7xl");
+    expect(container.querySelectorAll(".min-w-0").length).toBeGreaterThan(0);
+    expect(container.querySelector("[class*='overflow-x']")).not.toBeInTheDocument();
+
+    const metrics = screen.getByRole("region", { name: "Portfolio metrics" });
+    const grid = metrics.querySelector(".grid");
+    expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-4", "divide-x", "divide-y", "border-y", "sm:divide-y-0");
+    const trackedCell = within(metrics).getByText("Tracked grants").closest("div");
+    const requestedCell = within(metrics).getByText("Requested").closest("div");
+    const openPipelineCell = within(metrics).getByText("Open pipeline").closest("div");
+    const awardedCell = within(metrics).getByText("Awarded").closest("div");
+    // Left-column cells (Tracked grants first row, Requested second row) share same left edge at narrow
+    expect(trackedCell).toHaveClass("pl-0");
+    expect(requestedCell).toHaveClass("pl-0");
+    expect(trackedCell).toHaveClass("sm:px-5");
+    expect(requestedCell).toHaveClass("sm:px-5");
+    expect(openPipelineCell).toHaveClass("sm:px-5");
+    expect(awardedCell).toHaveClass("sm:px-5");
+    // numbers remain muted gray, not bold
+    expect(within(metrics).getByText("5")).toHaveClass("font-normal", "text-muted-foreground");
+    expect(within(metrics).getByText("3")).toHaveClass("font-normal", "text-muted-foreground");
+    // Due-within right-aligned at sm
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    expect(within(attention).getByText("Due within 7 days").closest("div")).toHaveClass("sm:text-right");
+  });
+
+  it("renders zero totals as $0 not null or em dash", () => {
     const dto = makeDto({
       totals: { trackedGrants: 0, openPipeline: 0, requestedTotal: "0", awardedTotal: "0", currency: "USD" },
       upcoming: [],
       attention: { overdueCount: 0, dueIn7Count: 0, oldestOverdueDays: null },
     });
     render(<DashboardContent dto={dto} />);
-    expect(screen.getAllByText("$0.00").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("$0").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("—")).not.toBeInTheDocument();
     expect(screen.queryByText("null")).not.toBeInTheDocument();
   });

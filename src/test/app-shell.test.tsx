@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { usePathnameMock, useClerkMock, useUserMock } = vi.hoisted(() => ({
@@ -93,6 +93,7 @@ describe("AppShell composition", () => {
 
     expect(screen.getByText("workspace content")).toBeInTheDocument();
     expect(screen.getAllByText("Grant Makers").length).toBeGreaterThan(0);
+    expect(within(screen.getByRole("banner")).getByText("Grant Makers")).toHaveClass("lg:hidden");
     expect(screen.getByRole("button", { name: /Open account menu/ })).toBeInTheDocument();
   });
 

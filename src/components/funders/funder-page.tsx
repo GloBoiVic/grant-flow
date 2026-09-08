@@ -29,9 +29,8 @@ export function FunderPage({ funders }: FunderPageProps): React.ReactNode {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-title text-foreground">Funders</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Organizations that support your grant portfolio.</p>
         </div>
-        <Button type="button" onClick={() => setIsFormOpen(true)} aria-expanded={isFormOpen} aria-controls="add-funder-form">
+        <Button type="button" onClick={() => setIsFormOpen(true)}>
           <Plus aria-hidden="true" /> Add funder
         </Button>
       </div>

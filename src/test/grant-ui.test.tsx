@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,24 +26,66 @@ const tags: TagDto[] = [{ id: "tag-1", name: "Housing" }, { id: "tag-2", name: "
 describe("grant UI states", () => {
   beforeEach(() => { vi.clearAllMocks(); window.confirm = vi.fn(() => false); });
 
-  it("exposes activity and an explicit accessible status control", () => {
-    render(<GrantDetailSheet grant={grant} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+  it("keeps the quick Sheet focused on inspection and action", () => {
+    render(<GrantDetailSheet grant={grant} funders={[funder]} open onClose={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Housing Stability Pilot" })).toBeInTheDocument();
+    expect(screen.getByText("North Star Foundation")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Change grant status" })).toHaveValue("Research");
-    expect(screen.getByText("Created grant Housing Stability Pilot.")).toBeInTheDocument();
+    expect(screen.getByText("Amount requested")).toBeInTheDocument();
+    expect(screen.getByText("USD 120,000")).toHaveClass("font-normal", "text-muted-foreground");
+    expect(screen.getByText("Deadline")).toBeInTheDocument();
+    expect(screen.getByText("Apr 18, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Next steps")).toBeInTheDocument();
+    expect(screen.getByText("Confirm eligibility")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit grant" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open full grant" })).toBeInTheDocument();
+    expect(screen.queryByText("Created grant Housing Stability Pilot.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Activity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Tags" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Add existing tag" })).not.toBeInTheDocument();
+  });
+
+  it("formats list and quick Sheet amounts without trailing zeroes", () => {
+    const amountGrant = { ...grant, amountRequested: "100.00", amountAwarded: "100.25" };
+    const listView = render(
+      <GrantsPage
+        grants={{ items: [{ ...amountGrant, funder }], page: 1, hasNextPage: false, hasPreviousPage: false }}
+        funders={[funder]}
+        selectedGrant={null}
+        tags={tags}
+        createOpen={false}
+      />,
+    );
+
+    const row = screen.getByRole("row", { name: "Open Housing Stability Pilot" });
+    expect(within(row).getByText("$100")).toHaveClass("text-muted-foreground");
+    expect(within(row).getByText("$100.25")).toHaveClass("text-muted-foreground");
+    expect(within(row).queryByText("$100.00")).not.toBeInTheDocument();
+    listView.unmount();
+
+    const { rerender } = render(<GrantDetailSheet grant={{ ...amountGrant, amountRequested: "100.00" }} funders={[funder]} open onClose={vi.fn()} />);
+    expect(screen.getByText("USD 100")).toHaveClass("font-normal", "text-muted-foreground");
+    expect(screen.queryByText("USD 100.00")).not.toBeInTheDocument();
+
+    rerender(<GrantDetailSheet grant={{ ...amountGrant, amountRequested: "100.25" }} funders={[funder]} open onClose={vi.fn()} />);
+    expect(screen.getByText("USD 100.25")).toBeInTheDocument();
+
+    rerender(<GrantDetailSheet grant={{ ...amountGrant, amountRequested: null }} funders={[funder]} open onClose={vi.fn()} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("reports status action success", async () => {
     changeStatusMock.mockResolvedValue({ success: true, data: { ...grant, status: "Qualified" } });
     const user = userEvent.setup();
-    render(<GrantDetailSheet grant={grant} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+    render(<GrantDetailSheet grant={grant} funders={[funder]} open onClose={vi.fn()} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "Change grant status" }), "Qualified");
     await user.click(screen.getByRole("button", { name: "Change status" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Status updated successfully.");
     expect(changeStatusMock).toHaveBeenCalledWith({ grantId: "grant-1", status: "Qualified" });
+    expect(refreshMock).toHaveBeenCalledOnce();
   });
 
-  it("renders the complete stacked workspace with explicit record fields and newest-first activity", () => {
+  it("renders one complete workspace surface with explicit record fields and newest-first activity", () => {
     const completeGrant: GrantDetailDto = {
       ...grant,
       title: "A very long housing stability grant title that still wraps safely",
@@ -67,6 +109,8 @@ describe("grant UI states", () => {
 
     render(<GrantWorkspace grant={completeGrant} funders={[funder]} tags={tags} />);
 
+    const overview = screen.getByRole("region", { name: "Overview" });
+    const workspaceSurface = overview.parentElement;
     expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toEqual([
       "A very long housing stability grant title that still wraps safely",
       "Overview",
@@ -74,23 +118,38 @@ describe("grant UI states", () => {
       "Notes",
       "Activity",
     ]);
+    expect(workspaceSurface?.parentElement).toHaveClass("max-w-6xl");
+    expect(workspaceSurface).toHaveClass("border");
+    expect(workspaceSurface).not.toHaveClass("shadow-sm");
+    expect(workspaceSurface?.querySelectorAll(".shadow-sm")).toHaveLength(0);
+    expect(within(overview).queryByText("Funder", { selector: "dt" })).not.toBeInTheDocument();
+    expect(within(overview).queryByText("Status", { selector: "dt" })).not.toBeInTheDocument();
+    expect(within(overview).queryByText("Currency", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.getByText("Family Fund")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "https://foundation.example/funder" })).toHaveAttribute("target", "_blank");
-    expect(screen.getByText("CAD CA$1,250.50")).toBeInTheDocument();
-    expect(screen.getByText("CAD CA$900.00")).toBeInTheDocument();
+    expect(screen.getByText(/CAD\s+1,250\.5/)).toHaveClass("font-normal", "text-muted-foreground");
+    expect(screen.getByText(/CAD\s+900/)).toHaveClass("font-normal", "text-muted-foreground");
+    expect(screen.queryByText(/CAD\s+900\.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CA\$/)).not.toBeInTheDocument();
+    for (const label of ["Amount requested", "Amount awarded", "Application deadline", "Decision date", "Award timeframe", "Designation", "County served", "Next steps"]) {
+      expect(within(overview).getByText(label, { selector: "dt" })).toBeInTheDocument();
+    }
     expect(screen.getByText("Sep 30, 2026")).toBeInTheDocument();
     expect(screen.getByText("Nov 15, 2026")).toBeInTheDocument();
     expect(screen.getByText("Within 90 days")).toBeInTheDocument();
     expect(screen.getByText("Local County")).toBeInTheDocument();
+    expect(within(overview).getByText("Housing", { selector: "dd" })).toBeInTheDocument();
     expect(screen.getByText(/Submit the final budget/)).toBeInTheDocument();
     expect(screen.getByText(/Review attachments/)).toBeInTheDocument();
     expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
     expect(screen.queryByText("FAMILY_FUND")).not.toBeInTheDocument();
+    expect(screen.getByText("Internal Review", { selector: "span" })).toHaveClass("bg-status-in-progress", "text-status-in-progress-fg");
     expect(screen.getByText("Moved to internal review")).toBeInTheDocument();
     expect(screen.getByText("Created grant")).toBeInTheDocument();
     const activityList = screen.getByRole("list", { name: "Grant activity" });
     expect(activityList.textContent?.indexOf("Moved to internal review")).toBeLessThan(activityList.textContent?.indexOf("Created grant") ?? -1);
     expect(screen.getByRole("link", { name: "Back to Grants" })).toHaveAttribute("href", "/grants");
+    expect(screen.getByRole("link", { name: "Back to Grants" })).toHaveClass("focus-visible:outline-2");
   });
 
   it("keeps sparse records honest and exposes labeled workspace actions", () => {
@@ -100,10 +159,13 @@ describe("grant UI states", () => {
     expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
-    expect(screen.getByText("No notes recorded yet.")).toBeInTheDocument();
+    const overview = screen.getByRole("region", { name: "Overview" });
+    expect(within(overview).getByText("Currency", { selector: "dt" })).toBeInTheDocument();
+    expect(within(overview).getByText("USD")).toBeInTheDocument();
+    expect(screen.getByText("No notes yet.")).toBeInTheDocument();
     expect(screen.getByText("No tags assigned yet.")).toBeInTheDocument();
-    expect(screen.getByText("No activity recorded.")).toBeInTheDocument();
-    expect(screen.getByText("Funder website: —")).toBeInTheDocument();
+    expect(screen.getByText("No activity yet.")).toBeInTheDocument();
+    expect(screen.queryByText("Funder website: —")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit grant" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Change grant status" })).toHaveValue("Research");
   });
@@ -147,7 +209,7 @@ describe("grant UI states", () => {
   });
 
   it("adds an encoded full-workspace link to the portfolio Sheet", () => {
-    render(<GrantDetailSheet grant={{ ...grant, id: "grant/1" }} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+    render(<GrantDetailSheet grant={{ ...grant, id: "grant/1" }} funders={[funder]} open onClose={vi.fn()} />);
 
     expect(screen.getByRole("link", { name: "Open full grant" })).toHaveAttribute("href", "/grants/grant%2F1");
   });
@@ -155,7 +217,7 @@ describe("grant UI states", () => {
   it("assigns an active tag from the keyboard-friendly picker", async () => {
     assignTagMock.mockResolvedValue({ success: true, data: [tags[0]] });
     const user = userEvent.setup();
-    render(<GrantDetailSheet grant={grant} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+    render(<GrantWorkspace grant={grant} funders={[funder]} tags={tags} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "Add existing tag" }), "tag-1");
     await user.click(screen.getByRole("button", { name: "Add tag" }));
     expect(assignTagMock).toHaveBeenCalledWith({ grantId: "grant-1", tagId: "tag-1" });
@@ -168,7 +230,7 @@ describe("grant UI states", () => {
     assignTagMock.mockResolvedValue({ success: true, data: [tags[0]] });
     removeTagMock.mockResolvedValue({ success: true, data: [] });
     const user = userEvent.setup();
-    render(<GrantDetailSheet grant={grant} funders={[funder]} tags={tags} open onClose={vi.fn()} />);
+    render(<GrantWorkspace grant={grant} funders={[funder]} tags={tags} />);
     await user.type(screen.getByLabelText("Create a new tag"), "Housing");
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Housing created and added.");
@@ -194,9 +256,12 @@ describe("grant UI states", () => {
     expect(exportLink).toHaveClass("focus-visible:ring-2", "focus-visible:ring-ring/50");
     expect(screen.getByRole("button", { name: "Add grant" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add filter" })).toBeInTheDocument();
+    expect(screen.queryByText("Track opportunities, deadlines, and funding decisions.")).not.toBeInTheDocument();
     expect(screen.getByRole("row", { name: "Open Housing Stability Pilot" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getAllByRole("columnheader")).toHaveLength(6);
+    expect(screen.getByRole("table").closest("section")).not.toHaveClass("shadow-sm");
     expect(screen.queryByRole("link", { name: /report|activity|document|settings/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /report|activity|document|settings/i })).not.toBeInTheDocument();
   });
@@ -206,14 +271,24 @@ describe("grant UI states", () => {
 
     expect(screen.getByRole("link", { name: "Export portfolio" })).toHaveAttribute("href", "/export/portfolio");
     expect(screen.getByRole("heading", { name: "No grants yet" })).toBeInTheDocument();
+    expect(screen.getByText("Add your first grant.")).toBeInTheDocument();
+    expect(screen.queryByText(/spreadsheet/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Add grant" })).toHaveLength(2);
+  });
+
+  it("keeps grant creation disabled until a funder exists", () => {
+    render(<GrantsPage grants={{ items: [], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[]} selectedGrant={null} tags={[]} createOpen={false} />);
+
+    expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "Add a funder before creating a grant.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add grant" }).every((button) => button.hasAttribute("disabled"))).toBe(true);
   });
 
   it("keeps the export link available when filters produce an empty list", () => {
     render(<GrantsPage grants={{ items: [], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="q=Missing&status=Research&tag=tag-1&sort=funder&dir=desc&page=2" />);
 
     expect(screen.getByRole("link", { name: "Export portfolio" })).toHaveAttribute("href", "/export/portfolio");
-    expect(screen.getByRole("heading", { name: "No grants match these filters" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No grants match these filters." })).toBeInTheDocument();
+    expect(screen.queryByText("Try removing a filter or searching for a different grant.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Add grant" })).toHaveLength(1);
   });
@@ -264,6 +339,7 @@ describe("grant UI states", () => {
     await user.click(screen.getByRole("button", { name: "Add filter" }));
     expect(screen.getByText("Internal Review")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Research" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Research" })).toHaveFocus();
     expect(screen.getByRole("checkbox", { name: "Housing" })).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "Awarded" }));
     expect(pushMock).toHaveBeenCalledWith("/grants?tag=tag-1&status=Research&status=Awarded");
@@ -317,5 +393,7 @@ describe("grant UI states", () => {
     expect(payload).toMatchObject({ grantId: "grant-1", title: "Updated grant", funderId: "funder-1" });
     expect(payload).not.toHaveProperty("status");
     expect(await screen.findByRole("status")).toHaveTextContent("Grant updated successfully.");
+    expect(screen.getByText("Change status with the status control.")).toBeInTheDocument();
+    expect(screen.queryByText("Update the grant record without leaving your portfolio.")).not.toBeInTheDocument();
   });
 });

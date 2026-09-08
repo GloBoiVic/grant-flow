@@ -17,7 +17,7 @@ import ImportPage from "@/app/(authenticated)/(org-required)/import/page";
 import { PortfolioImportPage } from "@/components/import/portfolio-import-page";
 import type { PortfolioImportPreview } from "@/lib/import/portfolio-xlsx";
 
-const ACKNOWLEDGEMENT_TEXT = "I reviewed the valid rows and understand that this import will create new GrantFlow grant records.";
+const ACKNOWLEDGEMENT_TEXT = "I reviewed the valid rows and understand that this creates new grant records.";
 
 const preview: PortfolioImportPreview = {
   fileName: "board-tracker.xlsx",
@@ -53,7 +53,7 @@ const preview: PortfolioImportPreview = {
       amountSelection: { requestedSourceColumn: "Requested Year 2025", awardedSourceColumn: null },
       preservedSourceValues: [{ sourceColumn: "Requested Year 2024", value: "90000" }],
       errors: [],
-      warnings: [],
+      warnings: ["Review this row before importing."],
       collapsedIntoSourceRow: null,
       collapsedSourceRows: [],
     },
@@ -126,7 +126,7 @@ describe("portfolio import UI", () => {
     expect(screen.getByRole("button", { name: "Analyze workbook" })).toBeEnabled();
   });
 
-  it("shows the server preview, requires exact acknowledgement, and re-submits the file", async () => {
+  it("shows the preview, requires exact acknowledgement, and re-submits the file", async () => {
     analyzeMock.mockResolvedValue({ success: true, data: preview });
     confirmMock.mockResolvedValue({ success: true, data: completion });
     const user = userEvent.setup();
@@ -134,29 +134,54 @@ describe("portfolio import UI", () => {
     await user.upload(screen.getByLabelText("Excel workbook"), selectedWorkbook());
     await user.click(screen.getByRole("button", { name: "Analyze workbook" }));
 
-    expect(await screen.findByRole("heading", { name: "Review what GrantFlow recognized" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Review import" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Import portfolio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose your workbook" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Workbook fields" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mapping" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Row decisions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Confirm import" })).toBeInTheDocument();
+    expect(screen.queryByText("Server-produced preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bring your grant tracker into focus")).not.toBeInTheDocument();
     expect(screen.getByText("Unsupported headers")).toBeInTheDocument();
     expect(screen.getByText("Internal owner is disclosed but is not imported.")).toBeInTheDocument();
+    expect(screen.getByText("Structural rows skipped").parentElement).toHaveTextContent("2");
+    expect(screen.getByText("Candidate rows").parentElement).toHaveTextContent("3");
+    expect(screen.getByText("Valid rows").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Invalid / excluded").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Collapsed duplicate rows").parentElement).toHaveTextContent("1");
+    expect(screen.getAllByText("Create North Star Foundation")).toHaveLength(2);
+    expect(screen.getAllByText("Preserved source values")).toHaveLength(2);
+    expect(screen.getAllByText("Requested Year 2024:")).toHaveLength(2);
     expect(screen.getByText("Source row 5")).toBeInTheDocument();
     expect(screen.getByText("Excluded because")).toBeInTheDocument();
-    expect(screen.getByText("Collapsed duplicate")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import 1 valid grants" })).toBeDisabled();
+    expect(screen.getByText("Review warning")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate of source row 4; no new grant will be created.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import 1 grant" })).toBeDisabled();
 
     const acknowledgement = screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT_TEXT });
     await user.click(acknowledgement);
-    expect(screen.getByRole("button", { name: "Import 1 valid grants" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Import 1 valid grants" }));
+    expect(screen.getByRole("button", { name: "Import 1 grant" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Import 1 grant" }));
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalledOnce());
     const confirmationData = confirmMock.mock.calls[0][0] as FormData;
     expect(confirmationData.get("file")).toBeInstanceOf(File);
     expect((confirmationData.get("file") as File).name).toBe("board-tracker.xlsx");
     expect(confirmationData.get("acknowledged")).toBe("true");
-    expect(await screen.findByRole("heading", { name: "Your portfolio is ready" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Import complete" })).toBeInTheDocument();
+    expect(screen.getByText(/original workbook and preview were not retained/)).toBeInTheDocument();
     expect(screen.getByText("Funders created").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Funders reused").parentElement).toHaveTextContent("0");
+    expect(screen.getByText("Grants created").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Duplicates collapsed").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Rows excluded").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Rows skipped").parentElement).toHaveTextContent("2");
     expect(screen.getByRole("link", { name: "View grants" })).toHaveAttribute("href", "/grants");
     expect(screen.getByRole("link", { name: "View funders" })).toHaveAttribute("href", "/funders");
-    expect(screen.queryByRole("button", { name: "Import 1 valid grants" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start another import" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import 1 grant" })).not.toBeInTheDocument();
   });
 
   it("keeps confirmation unavailable when every candidate row is invalid", async () => {
@@ -170,8 +195,8 @@ describe("portfolio import UI", () => {
     render(<PortfolioImportPage />);
     await user.upload(screen.getByLabelText("Excel workbook"), selectedWorkbook());
     await user.click(screen.getByRole("button", { name: "Analyze workbook" }));
-    expect(await screen.findByText("No valid grants remain. Correct the workbook and analyze it again.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import 0 valid grants" })).toBeDisabled();
+    expect(await screen.findByText("No valid grants remain. Fix the workbook and analyze it again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import 0 grants" })).toBeDisabled();
     expect(confirmMock).not.toHaveBeenCalled();
   });
 });

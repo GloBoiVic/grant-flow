@@ -47,13 +47,16 @@ export function DesktopSidebar({
       )}
     >
       <div className="flex h-(--layout-topnav-h) items-center border-b border-sidebar-border px-4">
-        <span className={cn("truncate text-brand text-sidebar-foreground", collapsed && "sr-only")}>
+        <span className={cn("truncate text-brand text-primary", collapsed && "sr-only")}>
           GrantFlow
         </span>
         {collapsed && <span className="sr-only">GrantFlow</span>}
       </div>
       <div className={cn("flex min-h-0 flex-1 flex-col gap-6 p-3", collapsed && "items-center px-2")}>
-        <p className={cn("truncate text-caption text-muted-foreground", collapsed && "sr-only")}>
+        <p
+          className={cn("truncate text-sm font-medium text-foreground", collapsed && "sr-only")}
+          title={organizationName}
+        >
           {organizationName}
         </p>
         <NavigationList collapsed={collapsed} className="w-full" />
