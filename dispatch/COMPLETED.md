@@ -162,3 +162,14 @@ Final review corrections:
 - PostgreSQL-enabled full suite passed 251/251 with 0 skipped; focused tests, lint, TypeScript, Prisma verification, production build, and `git diff --check` passed. Safari Technology Preview automated desktop/mobile, Sheet navigation, and malformed/valid-nonexistent 404 checks passed.
 - Human Safari Technology Preview gate and explicit merge/GIT END approval were provided before finalization.
 - Feature commit: `32c1d69`; fast-forward merged to `main`; GIT END closure commit: `9351a72`; `main` was pushed to `origin`.
+
+## funder-maintenance — Funder Maintenance
+
+- Classification: Feature; execution branch `solo/funder-maintenance`; base `74a1295`.
+- Implemented organization-scoped Funder maintenance from `/funders`: complete five-field DTO/query/action support, atomic edits with `funder_updated` Activity, bounded detail Sheet, shared Add/Edit form contract, safe external links, and dependent Grant summary freshness.
+- Approved follow-up T003 accepts scheme-less Website values such as `example.com` and normalizes them to `https://example.com`; explicit HTTP(S), blank-to-null, and unsafe-scheme rejection remain intact.
+- Validation remediation R001 resolved unsafe URL schemes and dirty edit dismissal. T001/T002/T003 BUILD receipts, original validation, R001 chain, and T003 follow-up validation/review are complete; no unresolved Critical or Important findings remain.
+- Validation evidence: full PostgreSQL-enabled suite **279 passed / 0 skipped**; focused T003 suite **38 passed**; lint, TypeScript, Prisma verification, production build, and `git diff --check` passed. Safari Technology Preview automated checks passed; the user provided final visual/browser and merge approval.
+- Deferred non-blocking Minor: `example.com:8080` is rejected rather than normalized.
+- Feature commit: `1c6baf2`; fast-forward merged to `main`; `main` and the feature branch were pushed to `origin`.
+- GIT END completed; `dispatch/ACTIVE.md` is cleared. The local execution branch is safe to remove.
