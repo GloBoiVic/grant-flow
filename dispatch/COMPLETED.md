@@ -184,3 +184,13 @@ Final review corrections:
 - Safari Technology Preview browser diagnosis confirmed no export request on `/grants` load and one successful CSV attachment request after activating the link. The user confirmed the authenticated export worked.
 - Feature commit: `9486a81`; merge commit: `d907b7f`; `main` was pushed to `origin`.
 - GIT END completed; `dispatch/ACTIVE.md` is cleared. The local execution branch is safe to remove.
+
+## ui-simplification — Reduction-first UI and copy cleanup
+
+- Classification: Feature; execution branch `solo/ui-simplification`; base `08181a9` → merge `0f4da3e`.
+- Performed bounded composition/copy pass across Dashboard (`max-w-7xl` metrics strip gray `font-mono tabular-nums`, Needs attention muted zero `text-muted-foreground` + `sm:text-right`, `Oldest overdue` removed, upcoming `py-4`), Grant list (`max-w-7xl` dense table, header/empty copy), Grant detail Sheet (quick inspection only, tags/activity relocated to Workspace), Grant Workspace (`max-w-6xl` single surface, Funder/Status dedupe, code-aware currency `currencyDisplay: code`), Deadline View (`max-w-7xl` single `rounded-xl border` with `border-t` groups, left-border removed, heading/row `px-4` aligned, status via `Badge px-2 py-0.5 font-sans`), Funder list (`max-w-6xl` no footer/shadow) + detail Sheet + slideover `Sheet` for Add funder, Import (`max-w-6xl` container/copy reduction), Shell (desktop org dedupe, avatar `Open account menu` trigger, mobile `lg:hidden` org fallback).
+- Typography/brand: `IBM Plex Sans` words + `Geist Mono` plain-zero numbers (`layout.tsx` `IBM_Plex_Sans`/`Geist_Mono` `variable --font-sans/--font-mono`, `globals.css` fallbacks), `DesktopSidebar` org `text-sm font-medium text-foreground` with `title`, app `GrantFlow` `text-primary #4F46E5`, metrics `font-mono`.
+- Tasks: T001-T005 DONE; remediations R001 (amount decimals/weight/spacing), R002 (amount formatting), R003 (mobile `pl-0` Requested + funder slideover), R004 (org visibility + indigo + IBM Plex pairing), R005 (Geist Mono plain zero + deadlines/badge alignment), R006 (muted zero + heading `px-4`), R007 (deadline `sm:px-6` removal). All BUILD → VALIDATE → REVIEW PASS; only MINOR Safari MCP tooling limitation remains.
+- Validation evidence: full suite **296 tests (259 passed | 37 skipped)** across 44 files, `npx tsc --noEmit` PASS, `npm run lint` PASS, `npm run build` 11 routes compiled (Next 16.3.0 + Prisma generate), `git diff --check` clean. No schema/migration/query/auth/import/export change.
+- Merge: feature `37c1115` → `main` via `0f4da3e` (`--no-ff`); `main` pushed to `origin`.
+- GIT END completed; `dispatch/ACTIVE.md` cleared.
