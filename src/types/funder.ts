@@ -6,6 +6,8 @@ export interface FunderDto {
   name: string;
   type: FunderType;
   website: string | null;
+  countyServed: string | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -15,4 +17,5 @@ export interface FunderListDto {
 }
 
 export type CreateFunderResult = ActionResult<FunderDto>;
+export type EditFunderResult = ActionResult<FunderDto>;
 export type ListFunderResult = ActionResult<FunderListDto>;

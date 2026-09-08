@@ -43,6 +43,33 @@ describe("organization-scoped domain queries", () => {
     }));
   });
 
+  it("returns all maintained Funder fields as serializable DTO values", async () => {
+    mocks.funderFindMany.mockResolvedValue([{
+      id: "funder-1",
+      name: "Local Foundation",
+      type: "FOUNDATION",
+      website: "https://foundation.example",
+      countyServed: "Local County",
+      notes: "Review the annual report",
+      createdAt: new Date("2026-08-20T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-21T00:00:00.000Z"),
+    }]);
+
+    await expect(listFunders()).resolves.toEqual({ items: [{
+      id: "funder-1",
+      name: "Local Foundation",
+      type: "FOUNDATION",
+      website: "https://foundation.example",
+      countyServed: "Local County",
+      notes: "Review the annual report",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-21T00:00:00.000Z",
+    }] });
+    expect(mocks.funderFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: { id: true, name: true, type: true, website: true, countyServed: true, notes: true, createdAt: true, updatedAt: true },
+    }));
+  });
+
   it("scopes grant listing and uses fixed offset pagination", async () => {
     await listGrants({ statuses: [], tagIds: [], sort: "deadline", direction: "asc", page: 2 });
     expect(mocks.grantFindMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -158,6 +185,8 @@ describe("organization-scoped domain queries", () => {
         name: "Local Foundation",
         type: "FOUNDATION",
         website: "https://foundation.example",
+        countyServed: "Funder County",
+        notes: "Funder notes",
         createdAt: new Date("2026-08-01T00:00:00.000Z"),
         updatedAt: new Date("2026-08-02T00:00:00.000Z"),
       },
@@ -204,12 +233,14 @@ describe("organization-scoped domain queries", () => {
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-21T00:00:00.000Z",
       tags: [{ id: "tag-1", name: "Housing" }],
-      funder: {
-        id: "funder-1",
-        name: "Local Foundation",
-        type: "FOUNDATION",
-        website: "https://foundation.example",
-        createdAt: "2026-08-01T00:00:00.000Z",
+        funder: {
+          id: "funder-1",
+          name: "Local Foundation",
+          type: "FOUNDATION",
+          website: "https://foundation.example",
+          countyServed: "Funder County",
+          notes: "Funder notes",
+          createdAt: "2026-08-01T00:00:00.000Z",
         updatedAt: "2026-08-02T00:00:00.000Z",
       },
       activities: [
@@ -265,6 +296,16 @@ describe("organization-scoped domain queries", () => {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       },
     });
+    expect(query.select.funder).toEqual({ select: {
+      id: true,
+      name: true,
+      type: true,
+      website: true,
+      countyServed: true,
+      notes: true,
+      createdAt: true,
+      updatedAt: true,
+    } });
   });
 
   it("scopes activity reads and serializes timestamps and metadata", async () => {

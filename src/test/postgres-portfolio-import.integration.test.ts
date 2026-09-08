@@ -58,7 +58,7 @@ function formData(rows: unknown[][], acknowledged = true): FormData {
 }
 
 describePostgres("PostgreSQL portfolio import isolation and atomic persistence", () => {
-  const headers = ["Funder", "Type", "Current Status", "Designation"];
+  const headers = ["Funder", "Type", "Current Status", "Designation", "County Served", "Notes"];
 
   async function cleanup(): Promise<void> {
     const errors: unknown[] = [];
@@ -136,7 +136,7 @@ describePostgres("PostgreSQL portfolio import isolation and atomic persistence",
       headers,
       [" Existing   Funder ", "Other", "Submitted", "Program"],
       [" Existing   Funder ", "Other", "Submitted", "Program"],
-      ["New Funder", "Foundation", "To Apply", "Opportunity"],
+      ["New Funder", "Foundation", "To Apply", "Opportunity", "Imported County", "Imported Notes"],
     ];
 
     const preview = await actions!.analyzePortfolioImport(formData(rows, false));
@@ -154,6 +154,8 @@ describePostgres("PostgreSQL portfolio import isolation and atomic persistence",
     const grants = await db!.grant.findMany({ where: { organizationId: orgAId } });
     expect(grants).toHaveLength(2);
     expect(grants.every((grant) => grant.ownerId === userAId && grant.createdById === userAId)).toBe(true);
+    expect(grants.find((grant) => grant.title === "New Funder — Opportunity")).toMatchObject({ countyServed: "Imported County", notes: "Imported Notes" });
+    expect(await db!.funder.findFirst({ where: { organizationId: orgAId, name: "New Funder" }, select: { countyServed: true, notes: true } })).toEqual({ countyServed: null, notes: null });
     expect(await db!.activity.count({ where: { organizationId: orgAId, action: "funder_created" } })).toBe(1);
     expect(await db!.activity.count({ where: { organizationId: orgAId, action: "grant_created" } })).toBe(2);
     expect(await db!.activity.count({ where: { organizationId: orgBId } })).toBe(0);

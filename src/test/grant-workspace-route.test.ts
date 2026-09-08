@@ -43,6 +43,8 @@ const grant = {
     name: "Community Funder",
     type: "FOUNDATION",
     website: null,
+    countyServed: null,
+    notes: null,
     createdAt: "2026-08-20T00:00:00.000Z",
     updatedAt: "2026-08-20T00:00:00.000Z",
   },
@@ -53,7 +55,7 @@ describe("grant workspace route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.GrantWorkspace.mockReturnValue(null);
-    mocks.listFunders.mockResolvedValue({ items: [{ id: "funder-123", name: "Community Funder", type: "FOUNDATION", website: null, createdAt: "2026-08-20T00:00:00.000Z", updatedAt: "2026-08-20T00:00:00.000Z" }] });
+    mocks.listFunders.mockResolvedValue({ items: [{ id: "funder-123", name: "Community Funder", type: "FOUNDATION", website: null, countyServed: null, notes: null, createdAt: "2026-08-20T00:00:00.000Z", updatedAt: "2026-08-20T00:00:00.000Z" }] });
     mocks.listTags.mockResolvedValue({ items: [{ id: "tag-123", name: "Housing" }] });
   });
 

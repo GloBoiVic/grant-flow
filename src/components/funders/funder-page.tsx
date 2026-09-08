@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { FunderDto } from "@/types/funder";
+import { FunderDetailSheet } from "./funder-detail-sheet";
 import { FunderForm } from "./funder-form";
 import { FunderList } from "./funder-list";
 
@@ -13,7 +15,14 @@ interface FunderPageProps {
 }
 
 export function FunderPage({ funders }: FunderPageProps): React.ReactNode {
+  const router = useRouter();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedFunder, setSelectedFunder] = useState<FunderDto | null>(null);
+
+  function handleFunderSaved(funder: FunderDto): void {
+    setSelectedFunder(funder);
+    router.refresh();
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 lg:px-8">
@@ -27,7 +36,8 @@ export function FunderPage({ funders }: FunderPageProps): React.ReactNode {
         </Button>
       </div>
       <FunderForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
-      <FunderList funders={funders} />
+      <FunderList funders={funders} onSelect={setSelectedFunder} />
+      {selectedFunder && <FunderDetailSheet key={selectedFunder.id} funder={selectedFunder} open onClose={() => setSelectedFunder(null)} onSaved={handleFunderSaved} />}
     </div>
   );
 }

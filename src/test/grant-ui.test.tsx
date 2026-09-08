@@ -19,7 +19,7 @@ import type { FunderDto } from "@/types/funder";
 import type { GrantDetailDto } from "@/types/grant";
 import type { TagDto } from "@/types/tag";
 
-const funder: FunderDto = { id: "funder-1", name: "North Star Foundation", type: "FOUNDATION", website: null, createdAt: "2026-08-21T00:00:00.000Z", updatedAt: "2026-08-21T00:00:00.000Z" };
+const funder: FunderDto = { id: "funder-1", name: "North Star Foundation", type: "FOUNDATION", website: null, countyServed: null, notes: null, createdAt: "2026-08-21T00:00:00.000Z", updatedAt: "2026-08-21T00:00:00.000Z" };
 const grant: GrantDetailDto = { id: "grant-1", funderId: funder.id, title: "Housing Stability Pilot", status: "Research", currency: "USD", amountRequested: "120000", amountAwarded: null, deadline: "2026-04-18", decisionDate: null, awardTimeframe: null, designation: "Housing", countyServed: null, nextSteps: "Confirm eligibility", notes: null, ownerId: "user-1", createdById: "user-1", createdAt: "2026-08-21T00:00:00.000Z", updatedAt: "2026-08-21T00:00:00.000Z", funder, tags: [], activities: [{ id: "activity-1", action: "grant_created", description: "Created grant Housing Stability Pilot.", metadata: null, actorId: "user-1", createdAt: "2026-08-21T00:00:00.000Z" }] };
 const tags: TagDto[] = [{ id: "tag-1", name: "Housing" }, { id: "tag-2", name: "Youth Services" }];
 

@@ -1,12 +1,72 @@
 import { describe, expect, it } from "vitest";
 
-import { createFunderSchema } from "@/lib/validations/funder";
+import { createFunderSchema, editFunderSchema } from "@/lib/validations/funder";
 import { changeGrantStatusSchema, createGrantSchema, editGrantSchema, GrantStatus } from "@/lib/validations/grant";
 import { assignTagSchema, createTagSchema, normalizeTagName, removeTagSchema } from "@/lib/validations/tag";
 
 describe("domain server contracts", () => {
   it("rejects server-owned funder fields", () => {
     expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", organizationId: "org" }).success).toBe(false);
+  });
+
+  it("normalizes all nullable Funder fields and enforces their established limits", () => {
+    const result = createFunderSchema.safeParse({
+      name: "  Foundation  ",
+      type: "FOUNDATION",
+      website: "  https://foundation.example  ",
+      countyServed: "  Local County  ",
+      notes: "  Keep this note.  ",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        name: "Foundation",
+        type: "FOUNDATION",
+        website: "https://foundation.example",
+        countyServed: "Local County",
+        notes: "Keep this note.",
+      });
+    }
+
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", website: "", countyServed: "", notes: "" })).toMatchObject({
+      success: true,
+      data: { website: null, countyServed: null, notes: null },
+    });
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", countyServed: "x".repeat(201) }).success).toBe(false);
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", notes: "x".repeat(10_001) }).success).toBe(false);
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", website: "not-a-url" }).success).toBe(false);
+  });
+
+  it.each(["javascript:alert(1)", "data:text/html,unsafe"]) ("rejects unsafe Website schemes: %s", (website) => {
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", website }).success).toBe(false);
+  });
+
+  it.each(["http://foundation.example", "https://foundation.example"]) ("preserves safe Website scheme: %s", (website) => {
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", website })).toMatchObject({
+      success: true,
+      data: { website },
+    });
+  });
+
+  it("normalizes scheme-less Website values before validation", () => {
+    expect(createFunderSchema.safeParse({ name: "Fund", type: "FOUNDATION", website: "  example.com  " })).toMatchObject({
+      success: true,
+      data: { website: "https://example.com" },
+    });
+    expect(editFunderSchema.safeParse({ funderId: "funder", name: "Fund", type: "FOUNDATION", website: "example.com", countyServed: null, notes: null })).toMatchObject({
+      success: true,
+      data: { website: "https://example.com" },
+    });
+  });
+
+  it("requires the complete strict edit contract and rejects server-owned fields", () => {
+    const valid = { funderId: "funder", name: "Fund", type: "FOUNDATION", website: null, countyServed: null, notes: null };
+    expect(editFunderSchema.safeParse(valid).success).toBe(true);
+    expect(editFunderSchema.safeParse({ ...valid, organizationId: "org" }).success).toBe(false);
+    expect(editFunderSchema.safeParse({ ...valid, updatedAt: new Date() }).success).toBe(false);
+    expect(editFunderSchema.safeParse({ ...valid, activity: { action: "funder_updated" } }).success).toBe(false);
+    expect(editFunderSchema.safeParse({ funderId: "funder", name: "Fund", type: "FOUNDATION" }).success).toBe(false);
   });
 
   it("accepts only money with at most two fractional digits and canonical dates", () => {

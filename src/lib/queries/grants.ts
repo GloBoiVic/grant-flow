@@ -29,7 +29,16 @@ const grantFields = {
   updatedAt: true,
 } as const;
 
-const funderFields = { id: true, name: true, type: true, website: true, createdAt: true, updatedAt: true } as const;
+const funderFields = {
+  id: true,
+  name: true,
+  type: true,
+  website: true,
+  countyServed: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 const activityFields = { id: true, action: true, description: true, metadata: true, actorId: true, createdAt: true } as const;
 

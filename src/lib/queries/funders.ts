@@ -9,6 +9,8 @@ const funderSelect = {
   name: true,
   type: true,
   website: true,
+  countyServed: true,
+  notes: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -18,6 +20,8 @@ type FunderRecord = {
   name: string;
   type: FunderDto["type"];
   website: string | null;
+  countyServed: string | null;
+  notes: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -28,6 +32,8 @@ function toFunderDto(funder: FunderRecord): FunderDto {
     name: funder.name,
     type: funder.type,
     website: funder.website,
+    countyServed: funder.countyServed,
+    notes: funder.notes,
     createdAt: funder.createdAt.toISOString(),
     updatedAt: funder.updatedAt.toISOString(),
   };

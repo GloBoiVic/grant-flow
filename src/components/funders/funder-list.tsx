@@ -2,6 +2,7 @@ import type { FunderDto } from "@/types/funder";
 
 interface FunderListProps {
   funders: FunderDto[];
+  onSelect: (funder: FunderDto) => void;
 }
 
 const typeLabels: Record<FunderDto["type"], string> = {
@@ -11,7 +12,7 @@ const typeLabels: Record<FunderDto["type"], string> = {
   OTHER: "Other",
 };
 
-export function FunderList({ funders }: FunderListProps): React.ReactNode {
+export function FunderList({ funders, onSelect }: FunderListProps): React.ReactNode {
   if (funders.length === 0) {
     return (
       <section className="mt-6 rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center" aria-labelledby="empty-funders-title">
@@ -32,9 +33,9 @@ export function FunderList({ funders }: FunderListProps): React.ReactNode {
           <tbody className="divide-y divide-border">
             {funders.map((funder) => (
               <tr key={funder.id} className="h-(--layout-table-row-h) hover:bg-accent/50">
-                <th scope="row" className="px-3 py-2 font-medium text-foreground sm:px-4">{funder.name}</th>
+                <th scope="row" className="max-w-[18rem] px-3 py-2 font-medium text-foreground sm:px-4"><button type="button" className="inline-block max-w-full break-words text-left text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2" aria-label={`Open details for ${funder.name}`} onClick={() => onSelect(funder)}>{funder.name}</button></th>
                 <td className="px-3 py-2 text-muted-foreground sm:px-4">{typeLabels[funder.type]}</td>
-                <td className="px-3 py-2 sm:px-4">{funder.website ? <a className="text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={funder.website} target="_blank" rel="noreferrer">{funder.website}</a> : <span className="text-muted-foreground">—</span>}</td>
+                <td className="max-w-[24rem] px-3 py-2 sm:px-4">{funder.website ? <a className="break-all text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={funder.website} target="_blank" rel="noreferrer">{funder.website}</a> : <span className="text-muted-foreground">—</span>}</td>
               </tr>
             ))}
           </tbody>

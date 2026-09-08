@@ -82,7 +82,13 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
   const userB = await client.user.create({ data: { clerkUserId: "user_bbbb", organizationId: orgB.id } });
   userAId = userA.id;
 
-  const funderA = await client.funder.create({ data: { organizationId: orgA.id, name: "Org A Funder", type: "FOUNDATION" } });
+  const funderA = await client.funder.create({ data: {
+    organizationId: orgA.id,
+    name: "Org A Funder",
+    type: "FOUNDATION",
+    countyServed: "Local Funder County",
+    notes: "Local Funder Notes",
+  } });
   const funderB = await client.funder.create({ data: { organizationId: orgB.id, name: "Org B Funder", type: "CORPORATION" } });
   const funderASoftDeleted = await client.funder.create({
     data: { organizationId: orgA.id, name: "Soft Deleted Funder", type: "OTHER", deletedAt: new Date("2026-08-01T00:00:00.000Z") },
@@ -284,9 +290,13 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
     setSession("user_aaaa");
     const result = await funderQueries!.listFunders();
     const ids = result.items.map((f) => f.id);
-    expect(ids).toContain(funderAId);
-    expect(ids).not.toContain(funderBId);
-    expect(ids).not.toContain(funderASoftDeletedId);
+     expect(ids).toContain(funderAId);
+     expect(ids).not.toContain(funderBId);
+     expect(ids).not.toContain(funderASoftDeletedId);
+     expect(result.items.find((funder) => funder.id === funderAId)).toMatchObject({
+       countyServed: "Local Funder County",
+       notes: "Local Funder Notes",
+     });
   });
 
   it("does not list another organization's grants or soft-deleted grants", async () => {
@@ -542,5 +552,91 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
     setSession("user_aaaa");
     const result = await actions!.createFunder({ name: "Admin Funder", type: "OTHER" });
     expect(result.success).toBe(true);
+  });
+
+  it("updates a local Funder completely, clears nullable fields, and keeps related Grant data intact", async () => {
+    setSession("user_aaaa");
+    const beforeGrant = await grantQueries!.getGrant(grantAId);
+    const result = await actions!.editFunder({
+      funderId: funderAId,
+      name: "Updated Org A Funder",
+      type: "CORPORATION",
+      website: "https://updated.example",
+      countyServed: "Updated Funder County",
+      notes: "Updated Funder Notes",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        id: funderAId,
+        name: "Updated Org A Funder",
+        type: "CORPORATION",
+        website: "https://updated.example",
+        countyServed: "Updated Funder County",
+        notes: "Updated Funder Notes",
+      },
+    });
+    const persisted = await db!.funder.findUnique({ where: { id: funderAId } });
+    expect(persisted).toMatchObject({
+      organizationId: orgAId,
+      name: "Updated Org A Funder",
+      type: "CORPORATION",
+      website: "https://updated.example",
+      countyServed: "Updated Funder County",
+      notes: "Updated Funder Notes",
+    });
+    const activity = await db!.activity.findFirst({ where: { funderId: funderAId, action: "funder_updated" }, orderBy: { createdAt: "desc" } });
+    expect(activity).toMatchObject({
+      organizationId: orgAId,
+      funderId: funderAId,
+      action: "funder_updated",
+      description: "Updated funder Updated Org A Funder.",
+      actorId: userAId,
+    });
+
+    const afterGrant = await grantQueries!.getGrant(grantAId);
+    expect(afterGrant).toMatchObject({
+      id: beforeGrant?.id,
+      title: beforeGrant?.title,
+      status: beforeGrant?.status,
+      tags: beforeGrant?.tags,
+      activities: beforeGrant?.activities,
+      funder: {
+        id: funderAId,
+        name: "Updated Org A Funder",
+        type: "CORPORATION",
+        website: "https://updated.example",
+      },
+    });
+
+    const cleared = await actions!.editFunder({
+      funderId: funderAId,
+      name: "Updated Org A Funder",
+      type: "CORPORATION",
+      website: "",
+      countyServed: "",
+      notes: "",
+    });
+    expect(cleared).toMatchObject({ success: true, data: { website: null, countyServed: null, notes: null } });
+    expect(await db!.funder.findUnique({ where: { id: funderAId }, select: { website: true, countyServed: true, notes: true } })).toEqual({ website: null, countyServed: null, notes: null });
+  });
+
+  it("does not change or append Activity for invalid, cross-organization, or soft-deleted Funder edits", async () => {
+    setSession("user_aaaa");
+    const beforeInvalid = await db!.funder.findUnique({ where: { id: funderAId }, select: { name: true, type: true, website: true, countyServed: true, notes: true } });
+    const beforeInvalidActivity = await db!.activity.count({ where: { funderId: funderAId, action: "funder_updated" } });
+    const invalid = await actions!.editFunder({ funderId: funderAId, name: "", type: "FOUNDATION", website: null, countyServed: null, notes: null });
+    expect(invalid.success).toBe(false);
+    expect(await db!.funder.findUnique({ where: { id: funderAId }, select: { name: true, type: true, website: true, countyServed: true, notes: true } })).toEqual(beforeInvalid);
+    expect(await db!.activity.count({ where: { funderId: funderAId, action: "funder_updated" } })).toBe(beforeInvalidActivity);
+
+    for (const unavailableId of [funderBId, funderASoftDeletedId]) {
+      const before = await db!.funder.findUnique({ where: { id: unavailableId }, select: { name: true, type: true, website: true, countyServed: true, notes: true } });
+      const beforeActivity = await db!.activity.count({ where: { funderId: unavailableId, action: "funder_updated" } });
+      await expect(actions!.editFunder({ funderId: unavailableId, name: "Should not persist", type: "OTHER", website: null, countyServed: null, notes: null })).resolves.toEqual({ success: false, error: "Funder not found." });
+      expect(await db!.funder.findUnique({ where: { id: unavailableId }, select: { name: true, type: true, website: true, countyServed: true, notes: true } })).toEqual(before);
+      expect(await db!.activity.count({ where: { funderId: unavailableId, action: "funder_updated" } })).toBe(beforeActivity);
+    }
   });
 });

@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { authorizeAction } from "@/lib/clerk/authorization";
 import { prisma } from "@/lib/prisma";
-import { createFunderSchema } from "@/lib/validations/funder";
+import { createFunderSchema, editFunderSchema } from "@/lib/validations/funder";
 import { changeGrantStatusSchema, createGrantSchema, editGrantSchema } from "@/lib/validations/grant";
 import type { ActionResult } from "@/types/common";
-import type { CreateFunderResult } from "@/types/funder";
+import type { CreateFunderResult, EditFunderResult, FunderDto } from "@/types/funder";
 import type { ChangeGrantStatusResult, CreateGrantResult, EditGrantResult, GrantDetailDto } from "@/types/grant";
 
 const grantSelect = {
@@ -29,8 +29,50 @@ const grantSelect = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  funder: { select: { id: true, name: true, type: true, website: true, createdAt: true, updatedAt: true } },
+  funder: { select: {
+    id: true,
+    name: true,
+    type: true,
+    website: true,
+    countyServed: true,
+    notes: true,
+    createdAt: true,
+    updatedAt: true,
+  } },
 } as const;
+
+const funderSelect = {
+  id: true,
+  name: true,
+  type: true,
+  website: true,
+  countyServed: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+function funderDto(funder: {
+  id: string;
+  name: string;
+  type: FunderDto["type"];
+  website: string | null;
+  countyServed: string | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): FunderDto {
+  return {
+    id: funder.id,
+    name: funder.name,
+    type: funder.type,
+    website: funder.website,
+    countyServed: funder.countyServed,
+    notes: funder.notes,
+    createdAt: funder.createdAt.toISOString(),
+    updatedAt: funder.updatedAt.toISOString(),
+  };
+}
 
 function dateValue(value: string | null | undefined): Date | null | undefined {
   return value === undefined ? undefined : value === null ? null : new Date(`${value}T00:00:00.000Z`);
@@ -42,7 +84,16 @@ function grantDto(grant: {
   deadline: Date | null; decisionDate: Date | null; awardTimeframe: string | null;
   designation: string | null; countyServed: string | null; nextSteps: string | null; notes: string | null;
   ownerId: string | null; createdById: string; createdAt: Date; updatedAt: Date;
-  funder: { id: string; name: string; type: "FOUNDATION" | "FAMILY_FUND" | "CORPORATION" | "OTHER"; website: string | null; createdAt: Date; updatedAt: Date };
+  funder: {
+    id: string;
+    name: string;
+    type: "FOUNDATION" | "FAMILY_FUND" | "CORPORATION" | "OTHER";
+    website: string | null;
+    countyServed: string | null;
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  };
 }, activity: GrantDetailDto["activities"][number] | null): GrantDetailDto {
   return {
     id: grant.id, funderId: grant.funderId, title: grant.title, status: (grant.status === "InternalReview" ? "Internal Review" : grant.status) as GrantDetailDto["status"],
@@ -80,12 +131,62 @@ export async function createFunder(input: unknown): Promise<CreateFunderResult> 
   const authorization = await authorizeAction();
   if ("success" in authorization) return authorization;
   const funder = await prisma.$transaction(async (tx) => {
-    const created = await tx.funder.create({ data: { organizationId: authorization.organizationId, name: parsed.data.name, type: parsed.data.type, website: parsed.data.website ?? null } });
+    const created = await tx.funder.create({ data: {
+      organizationId: authorization.organizationId,
+      name: parsed.data.name,
+      type: parsed.data.type,
+      website: parsed.data.website ?? null,
+      countyServed: parsed.data.countyServed ?? null,
+      notes: parsed.data.notes ?? null,
+    } });
     await tx.activity.create({ data: { organizationId: authorization.organizationId, funderId: created.id, action: "funder_created", description: `Created funder ${created.name}.`, actorId: authorization.userId } });
     return created;
   });
   revalidatePath("/grants");
-  return { success: true, data: { id: funder.id, name: funder.name, type: funder.type, website: funder.website, createdAt: funder.createdAt.toISOString(), updatedAt: funder.updatedAt.toISOString() } };
+  revalidatePath("/funders");
+  return { success: true, data: funderDto(funder) };
+}
+
+export async function editFunder(input: unknown): Promise<EditFunderResult> {
+  const parsed = editFunderSchema.safeParse(input);
+  if (!parsed.success) return invalid("Invalid funder details.", validationErrors(parsed.error));
+  const authorization = await authorizeAction();
+  if ("success" in authorization) return authorization;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.funder.findFirst({
+      where: { id: parsed.data.funderId, organizationId: authorization.organizationId, deletedAt: null },
+    });
+    if (!existing) return null;
+
+    const funder = await tx.funder.update({
+      where: { id: existing.id },
+      data: {
+        name: parsed.data.name,
+        type: parsed.data.type,
+        website: parsed.data.website,
+        countyServed: parsed.data.countyServed,
+        notes: parsed.data.notes,
+      },
+      select: funderSelect,
+    });
+    await tx.activity.create({
+      data: {
+        organizationId: authorization.organizationId,
+        funderId: funder.id,
+        action: "funder_updated",
+        description: `Updated funder ${funder.name}.`,
+        actorId: authorization.userId,
+      },
+    });
+    return funder;
+  });
+  if (!result) return invalid("Funder not found.");
+
+  revalidatePath("/funders");
+  revalidatePath("/grants");
+  revalidatePath("/grants/[grantId]", "page");
+  return { success: true, data: funderDto(result) };
 }
 
 export async function createGrant(input: unknown): Promise<CreateGrantResult> {
