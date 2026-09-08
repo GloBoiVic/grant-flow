@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   grantGroupBy: vi.fn(),
   grantAggregate: vi.fn(),
   grantCount: vi.fn(),
+  grantFindFirst: vi.fn(),
   grantFindMany: vi.fn(),
 }));
 
@@ -17,6 +18,7 @@ vi.mock("@/lib/prisma", () => ({
       groupBy: mocks.grantGroupBy,
       aggregate: mocks.grantAggregate,
       count: mocks.grantCount,
+      findFirst: mocks.grantFindFirst,
       findMany: mocks.grantFindMany,
     },
   },
@@ -36,6 +38,7 @@ describe("dashboard query seam", () => {
     mocks.grantAggregate.mockResolvedValue({ _sum: { amountRequested: null, amountAwarded: null } });
     // grantCount called twice (overdue, dueIn7) — use mockResolvedValue sequence handling via implementation
     mocks.grantCount.mockResolvedValue(0);
+    mocks.grantFindFirst.mockResolvedValue(null);
     mocks.grantFindMany.mockResolvedValue([]);
   });
 
@@ -127,6 +130,42 @@ describe("dashboard query seam", () => {
         },
       }),
     );
+  });
+
+  it("selects the oldest overdue deadline with the same scope, status filter, and deterministic ordering", async () => {
+    mocks.grantCount.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    mocks.grantFindFirst.mockResolvedValue({ deadline: new Date("2026-09-03T00:00:00.000Z") });
+
+    const dto = await getDashboard({ today: TODAY });
+
+    expect(mocks.grantFindFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        deletedAt: null,
+        funder: { organizationId: "org-1", deletedAt: null },
+        status: { in: ["Research", "Qualified", "Planning", "Writing", "InternalReview"] },
+        deadline: { lt: TODAY },
+      },
+      select: { deadline: true },
+      orderBy: [{ deadline: "asc" }, { id: "asc" }],
+    });
+    expect(dto.attention.oldestOverdueDays).toBe(1);
+  });
+
+  it("returns null when there is no eligible overdue deadline", async () => {
+    const dto = await getDashboard({ today: TODAY });
+
+    expect(dto.attention.overdueCount).toBe(0);
+    expect(dto.attention.oldestOverdueDays).toBeNull();
+  });
+
+  it("returns a plural UTC date-only age for an older overdue deadline", async () => {
+    mocks.grantCount.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+    mocks.grantFindFirst.mockResolvedValue({ deadline: new Date("2026-08-01T23:59:59.000Z") });
+
+    const dto = await getDashboard({ today: new Date("2026-09-04T18:30:00.000Z") });
+
+    expect(dto.attention.oldestOverdueDays).toBe(34);
   });
 
   it("counts due-in-7 with inclusive today..today+7 and same pre-submission filter", async () => {

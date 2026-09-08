@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
-import DeadlinesPage from "@/app/(authenticated)/(org-required)/deadlines/page";
 
 describe("FeaturePlaceholder", () => {
   it("renders an honest Planned badge, title, and not-available copy", () => {
@@ -22,24 +21,5 @@ describe("FeaturePlaceholder", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  });
-});
-
-describe.each([["Deadlines", DeadlinesPage, "Deadlines"]] as const)("%s placeholder route", (_name, Page, title) => {
-  it("renders the honest placeholder with no fabricated records or values", () => {
-    const { container } = render(<Page />);
-
-    expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
-    expect(screen.getByText("Planned")).toBeInTheDocument();
-    expect(screen.getByText(/not available yet/)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-
-    // No fabricated numbers, status values, tables, or filters.
-    const text = container.textContent ?? "";
-    expect(text).not.toMatch(/\$\d/);
-    expect(text).not.toMatch(/Research|Qualified|Awarded|Submitted/);
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });

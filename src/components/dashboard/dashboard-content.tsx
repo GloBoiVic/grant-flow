@@ -281,6 +281,11 @@ export function DashboardContent({ dto }: { dto: DashboardDto }): React.ReactNod
                   <p className={`text-sm ${hasOverdue ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
                     Overdue: {dto.attention.overdueCount}
                   </p>
+                  {hasOverdue && dto.attention.oldestOverdueDays !== null && (
+                    <p className="mt-0.5 text-caption text-muted-foreground">
+                      Oldest overdue: {dto.attention.oldestOverdueDays} {dto.attention.oldestOverdueDays === 1 ? "day" : "days"}
+                    </p>
+                  )}
                 </div>
               </div>
               <span className={`text-metric tabular-nums ${hasOverdue ? "text-destructive" : "text-muted-foreground/70"}`} aria-hidden="true">

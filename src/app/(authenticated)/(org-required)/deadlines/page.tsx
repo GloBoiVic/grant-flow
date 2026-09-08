@@ -1,12 +1,9 @@
 import type { ReactNode } from "react";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { DeadlineView } from "@/components/deadlines/deadline-view";
+import { getDeadlineView } from "@/lib/queries/deadlines";
 
-export default function DeadlinesPage(): ReactNode {
-  return (
-    <FeaturePlaceholder
-      title="Deadlines"
-      description="A focused view of upcoming grant deadlines and the work that needs attention will be available here."
-    />
-  );
+export default async function DeadlinesPage(): Promise<ReactNode> {
+  const dto = await getDeadlineView();
+  return <DeadlineView dto={dto} />;
 }

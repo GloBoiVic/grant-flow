@@ -18,6 +18,7 @@ function makeDto(overrides: Partial<DashboardDto> = {}): DashboardDto {
     attention: {
       overdueCount: 1,
       dueIn7Count: 2,
+      oldestOverdueDays: 1,
     },
     upcoming: [
       { id: "grant-1", title: "Alpha", funderName: "Funder A", deadline: "2026-09-04", status: "Research" },
@@ -87,6 +88,7 @@ describe("DashboardContent", () => {
   it("shows overdue and due-within counts and honest continuation link", () => {
     render(<DashboardContent dto={makeDto()} />);
     expect(screen.getByText("Overdue: 1")).toBeInTheDocument();
+    expect(screen.getByText("Oldest overdue: 1 day")).toBeInTheDocument();
     expect(screen.getByText("Due within 7 days: 2")).toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Review pre-submission deadlines →" });
     expect(link).toBeInTheDocument();
@@ -198,7 +200,7 @@ describe("DashboardContent", () => {
   it("handles no tracked grants empty state", () => {
     const dto = makeDto({
       totals: { trackedGrants: 0, openPipeline: 0, requestedTotal: "0", awardedTotal: "0", currency: "USD" },
-      attention: { overdueCount: 0, dueIn7Count: 0 },
+      attention: { overdueCount: 0, dueIn7Count: 0, oldestOverdueDays: null },
       upcoming: [],
       breakdown: [
         { status: "Research", count: 0 },
@@ -242,10 +244,20 @@ describe("DashboardContent", () => {
   });
 
   it("shows no-attention text when both counts zero", () => {
-    render(<DashboardContent dto={makeDto({ attention: { overdueCount: 0, dueIn7Count: 0 } })} />);
+    render(<DashboardContent dto={makeDto({ attention: { overdueCount: 0, dueIn7Count: 0, oldestOverdueDays: null } })} />);
     expect(screen.getByText("Overdue: 0")).toBeInTheDocument();
     expect(screen.getByText("Due within 7 days: 0")).toBeInTheDocument();
+    expect(screen.queryByText(/Oldest overdue/)).not.toBeInTheDocument();
     expect(screen.getByText("No pre-submission application deadlines need attention.")).toBeInTheDocument();
+  });
+
+  it("renders plural oldest overdue age only for the overdue tile", () => {
+    render(<DashboardContent dto={makeDto({ attention: { overdueCount: 2, dueIn7Count: 0, oldestOverdueDays: 34 } })} />);
+
+    const age = screen.getByText("Oldest overdue: 34 days");
+    expect(age).toBeInTheDocument();
+    expect(age.parentElement).toContainElement(screen.getByText("Overdue: 2"));
+    expect(screen.getByText("Due within 7 days: 0")).toBeInTheDocument();
   });
 
   it("does not show no-attention text when counts non-zero", () => {
@@ -318,7 +330,7 @@ describe("DashboardContent", () => {
     const dto = makeDto({
       totals: { trackedGrants: 0, openPipeline: 0, requestedTotal: "0", awardedTotal: "0", currency: "USD" },
       upcoming: [],
-      attention: { overdueCount: 0, dueIn7Count: 0 },
+      attention: { overdueCount: 0, dueIn7Count: 0, oldestOverdueDays: null },
     });
     render(<DashboardContent dto={dto} />);
     expect(screen.getAllByText("$0.00").length).toBeGreaterThanOrEqual(2);

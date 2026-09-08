@@ -12,6 +12,7 @@ export interface DashboardDto {
   attention: {
     overdueCount: number;
     dueIn7Count: number;
+    oldestOverdueDays: number | null;
   };
   upcoming: Array<{
     id: string;
