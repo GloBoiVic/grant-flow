@@ -183,6 +183,41 @@ describe("grant UI states", () => {
     expect(screen.getByText("+1 more")).toBeInTheDocument();
   });
 
+  it("renders one focused semantic CSV export link beside the existing Grant actions", () => {
+    render(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 2, hasNextPage: true, hasPreviousPage: true }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="q=Housing&status=Research&tag=tag-1&sort=funder&dir=desc&page=2" />);
+
+    const exportLink = screen.getByRole("link", { name: "Export portfolio" });
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(exportLink).toHaveAttribute("href", "/export/portfolio");
+    expect(exportLink).toHaveAttribute("aria-describedby", "portfolio-export-description");
+    expect(screen.getByText("Download the current non-deleted Grant portfolio and related Funder information as a CSV file.")).toHaveClass("sr-only");
+    expect(exportLink).toHaveClass("focus-visible:ring-2", "focus-visible:ring-ring/50");
+    expect(screen.getByRole("button", { name: "Add grant" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add filter" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: "Open Housing Stability Pilot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /report|activity|document|settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /report|activity|document|settings/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the export link available in a true empty portfolio", () => {
+    render(<GrantsPage grants={{ items: [], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} />);
+
+    expect(screen.getByRole("link", { name: "Export portfolio" })).toHaveAttribute("href", "/export/portfolio");
+    expect(screen.getByRole("heading", { name: "No grants yet" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add grant" })).toHaveLength(2);
+  });
+
+  it("keeps the export link available when filters produce an empty list", () => {
+    render(<GrantsPage grants={{ items: [], page: 1, hasNextPage: false, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="q=Missing&status=Research&tag=tag-1&sort=funder&dir=desc&page=2" />);
+
+    expect(screen.getByRole("link", { name: "Export portfolio" })).toHaveAttribute("href", "/export/portfolio");
+    expect(screen.getByRole("heading", { name: "No grants match these filters" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add grant" })).toHaveLength(1);
+  });
+
   it("opens the detail Sheet from the whole row while preserving child controls and pagination", async () => {
     const user = userEvent.setup();
     render(<GrantsPage grants={{ items: [{ ...grant, funder }], page: 1, hasNextPage: true, hasPreviousPage: false }} funders={[funder]} selectedGrant={null} tags={tags} createOpen={false} listQuery="" />);
