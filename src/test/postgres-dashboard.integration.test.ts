@@ -30,9 +30,12 @@ let admin: Pool | undefined;
 let db: PrismaClient | undefined;
 let appPrisma: typeof import("@/lib/prisma").prisma | undefined;
 let dashboard: typeof import("@/lib/queries/dashboard") | undefined;
+let deadlineQueries: typeof import("@/lib/queries/deadlines") | undefined;
 
 // Helper IDs for later assertions
 let gTodayId = "";
+let gAncientId = "";
+let gOverdueId = "";
 let gPlus7Id = "";
 let gPlus8Id = "";
 let gPlus30Id = "";
@@ -70,7 +73,18 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
   });
 
   // Boundaries with fixed today 2026-09-04
-  await client.grant.create({
+  const gAncient = await client.grant.create({
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Ancient Overdue Research",
+      status: "Research",
+      deadline: utc("2020-01-01"),
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
+  });
+  const gOverdue = await client.grant.create({
     data: {
       organizationId: orgA.id,
       funderId: funderA.id,
@@ -189,6 +203,50 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
       createdById: userA.id,
     },
   });
+  await client.grant.create({
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Pending Today",
+      status: "Pending",
+      deadline: utc("2026-09-04"),
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
+  });
+  await client.grant.create({
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Declined Today",
+      status: "Declined",
+      deadline: utc("2026-09-04"),
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
+  });
+  await client.grant.create({
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Reporting Today",
+      status: "Reporting",
+      deadline: utc("2026-09-04"),
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
+  });
+  await client.grant.create({
+    data: {
+      organizationId: orgA.id,
+      funderId: funderA.id,
+      title: "Closed Today",
+      status: "Closed",
+      deadline: utc("2026-09-04"),
+      ownerId: userA.id,
+      createdById: userA.id,
+    },
+  });
   // Tie deadline 2026-09-05 two grants, different ids for ordering test
   const tieA = await client.grant.create({
     data: {
@@ -214,6 +272,8 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
   });
 
   gTodayId = gToday.id;
+  gAncientId = gAncient.id;
+  gOverdueId = gOverdue.id;
   gPlus7Id = gPlus7.id;
   gPlus8Id = gPlus8.id;
   gPlus30Id = gPlus30.id;
@@ -321,6 +381,7 @@ describePostgres("PostgreSQL dashboard isolation and deadline windows", () => {
       await seedDatabase(db);
       appPrisma = (await import("@/lib/prisma")).prisma;
       dashboard = await import("@/lib/queries/dashboard");
+      deadlineQueries = await import("@/lib/queries/deadlines");
     } catch (setupError) {
       try { await cleanup(); } catch (cleanupError) {
         throw new AggregateError([setupError, cleanupError], "setup and cleanup failed");
@@ -337,13 +398,13 @@ describePostgres("PostgreSQL dashboard isolation and deadline windows", () => {
     const dto = await dashboard!.getDashboard({ today: utc("2026-09-04") });
 
     // Tracked grants: count of orgA active grants with active same-org funder
-    // Seeded active grants for orgA: gOverdue, gToday, gPlus7, gPlus8, gPlus30, gPlus31, gNull, Submitted Today, Awarded Overdue, tieA, tieB = 11
+    // Seeded active grants for orgA: the 11 original rows plus one ancient and four excluded statuses = 16
     // (soft-deleted grant + soft-funder grant excluded, other org excluded)
-    expect(dto.totals.trackedGrants).toBe(11);
+    expect(dto.totals.trackedGrants).toBe(16);
     // Open pipeline = Research, Qualified, Planning, Writing, InternalReview, Submitted, Pending
-    // Among tracked: Research(Overdue, Plus31, Null, TieA) = 4 but plus tieA is Research, + Qualified(Today, TieB)=2, Planning(Plus7)=1, Writing(Plus8)=1, InternalReview(Plus30)=1, Submitted(Today)=1, Pending=0 => 4+2+1+1+1+1=10
-    // Null deadline still counts for totals/breakdown, Declined etc not present
-    expect(dto.totals.openPipeline).toBe(10);
+    // Among tracked: Research(Ancient, Overdue, Plus31, Null, TieA) = 5, Qualified(Today, TieB)=2, Planning=1, Writing=1, InternalReview=1, Submitted=1, Pending=1 => 12
+    // Null deadline still counts for totals/breakdown.
+    expect(dto.totals.openPipeline).toBe(12);
 
     // Requested sum: 100+200+400+500+600+700 = 2500 plus ties 0, Awarded overdue 0, nulls 0 => total 2500
     // plus other org 7777 must be excluded, soft-deleted 9999 excluded
@@ -358,21 +419,21 @@ describePostgres("PostgreSQL dashboard isolation and deadline windows", () => {
     expect(dto.breakdown.map((b) => b.status)).toEqual([
       "Research", "Qualified", "Planning", "Writing", "Internal Review", "Submitted", "Pending", "Awarded", "Declined", "Reporting", "Closed",
     ]);
-    // Research: Overdue, Plus31, Null, TieA = 4
-    expect(dto.breakdown.find((b) => b.status === "Research")?.count).toBe(4);
+    // Research: Ancient, Overdue, Plus31, Null, TieA = 5
+    expect(dto.breakdown.find((b) => b.status === "Research")?.count).toBe(5);
     // Qualified: Today + TieB = 2
     expect(dto.breakdown.find((b) => b.status === "Qualified")?.count).toBe(2);
-    // Pending etc zero
-    expect(dto.breakdown.find((b) => b.status === "Pending")?.count).toBe(0);
-    expect(dto.breakdown.find((b) => b.status === "Declined")?.count).toBe(0);
+    expect(dto.breakdown.find((b) => b.status === "Pending")?.count).toBe(1);
+    expect(dto.breakdown.find((b) => b.status === "Declined")?.count).toBe(1);
   });
 
   it("applies exact pre-submission deadline windows with inclusive boundaries", async () => {
     setSession("dash_user_a");
     const dto = await dashboard!.getDashboard({ today: utc("2026-09-04") });
 
-    // Overdue = pre-submission deadline < today: only gOverdue (2026-09-03) qualifies. Awarded Overdue excluded by status, Submitted excluded, Plus31 etc not overdue
-    expect(dto.attention.overdueCount).toBe(1);
+    // Overdue = pre-submission deadline < today: gAncient and gOverdue qualify. Awarded Overdue is excluded by status.
+    expect(dto.attention.overdueCount).toBe(2);
+    expect(dto.attention.oldestOverdueDays).toBe(2438);
 
     // DueIn7 = today <= deadline <= today+7 (2026-09-04 to 2026-09-11 inclusive): gToday (09-04), gPlus7 (09-11), tieA/B (09-05) => 4? Check tieA/B are within 7, gToday yes, gPlus7 yes => 4
     // However tieA/B included? Yes they are pre-submission and deadline 09-05 within window
@@ -407,7 +468,8 @@ describePostgres("PostgreSQL dashboard isolation and deadline windows", () => {
     setSession("dash_user_a");
     const dto = await dashboard!.getDashboard({ today: utc("2026-09-04") });
     // Null deadline grant should not affect attention or upcoming but does affect totals/breakdown
-    expect(dto.attention.overdueCount).toBe(1);
+    expect(dto.attention.overdueCount).toBe(2);
+    expect(dto.attention.oldestOverdueDays).toBe(2438);
     expect(dto.upcoming.some((u) => u.title === "Null Deadline")).toBe(false);
   });
 
@@ -419,7 +481,43 @@ describePostgres("PostgreSQL dashboard isolation and deadline windows", () => {
     // JSON serializable
     expect(() => JSON.parse(JSON.stringify(dto))).not.toThrow();
     // Verify other org's data didn't leak by checking counts would be higher if other org included
-    // Other org has 1 overdue Research deadline 09-03 — if leaked overdue would be 2
-    expect(dto.attention.overdueCount).not.toBe(2);
+    // Other org has 1 overdue Research deadline 09-03 — if leaked overdue would be 3
+    expect(dto.attention.overdueCount).toBe(2);
+  });
+
+  it("returns the scoped, disjoint deadline view with exact boundaries and stable ties", async () => {
+    setSession("dash_user_a");
+    const dto = await deadlineQueries!.getDeadlineView({ today: utc("2026-09-04") });
+    const rows = [...dto.groups.overdue, ...dto.groups.dueSoon, ...dto.groups.later];
+    const tieIds = [tieAId, tieBId].sort();
+
+    expect(dto.asOf).toBe("2026-09-04");
+    expect(dto.trackedGrantCount).toBe(16);
+    expect(dto.groups.overdue.map((row) => row.id)).toEqual([gAncientId, gOverdueId]);
+    expect(dto.groups.overdue.map((row) => row.deadline)).toEqual(["2020-01-01", "2026-09-03"]);
+    expect(dto.groups.dueSoon.map((row) => row.id)).toEqual([gTodayId, ...tieIds, gPlus7Id]);
+    expect(dto.groups.dueSoon.map((row) => row.deadline)).toEqual(["2026-09-04", "2026-09-05", "2026-09-05", "2026-09-11"]);
+    expect(dto.groups.later.map((row) => row.id)).toEqual([gPlus8Id, gPlus30Id]);
+    expect(dto.groups.later.map((row) => row.deadline)).toEqual(["2026-09-12", "2026-10-04"]);
+
+    expect(rows).toHaveLength(8);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+    expect(new Set(rows.map((row) => row.status))).toEqual(new Set(["Research", "Qualified", "Planning", "Writing", "Internal Review"]));
+    expect(rows.map((row) => row.title)).not.toEqual(expect.arrayContaining([
+      "Plus31 Research",
+      "Null Deadline",
+      "Submitted Today",
+      "Pending Today",
+      "Awarded Overdue",
+      "Declined Today",
+      "Reporting Today",
+      "Closed Today",
+      "Soft Deleted Grant",
+      "Soft Funder Grant",
+      "Other Org Grant",
+      "Other Org Upcoming",
+    ]));
+    expect(rows.find((row) => row.id === gPlus30Id)?.status).toBe("Internal Review");
+    expect(JSON.parse(JSON.stringify(dto))).toEqual(dto);
   });
 });

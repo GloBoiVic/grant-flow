@@ -94,8 +94,8 @@ export async function getDashboard(input?: { today?: Date }): Promise<DashboardD
     funder: { organizationId, deletedAt: null },
   };
 
-  // Bound: status aggregation, sums, overdue, dueIn7, upcoming
-  const [grouped, sums, overdueCount, dueIn7Count, upcomingRows] = await Promise.all([
+  // Bound: status aggregation, sums, overdue, dueIn7, oldest overdue, upcoming
+  const [grouped, sums, overdueCount, dueIn7Count, oldestOverdueRow, upcomingRows] = await Promise.all([
     prisma.grant.groupBy({
       by: ["status"],
       where: trackedWhere,
@@ -118,6 +118,15 @@ export async function getDashboard(input?: { today?: Date }): Promise<DashboardD
         status: { in: PRE_SUBMISSION_PRISMA },
         deadline: { gte: todayUtc, lte: todayPlus7 },
       },
+    }),
+    prisma.grant.findFirst({
+      where: {
+        ...trackedWhere,
+        status: { in: PRE_SUBMISSION_PRISMA },
+        deadline: { lt: todayUtc },
+      },
+      select: { deadline: true },
+      orderBy: [{ deadline: "asc" }, { id: "asc" }],
     }),
     prisma.grant.findMany({
       where: {
@@ -158,6 +167,9 @@ export async function getDashboard(input?: { today?: Date }): Promise<DashboardD
 
   const requestedTotal = (sums._sum.amountRequested?.toString() ?? "0");
   const awardedTotal = (sums._sum.amountAwarded?.toString() ?? "0");
+  const oldestOverdueDays = oldestOverdueRow?.deadline
+    ? Math.max(0, Math.floor((todayUtc.getTime() - toUtcDateOnly(oldestOverdueRow.deadline).getTime()) / 86_400_000))
+    : null;
 
   const upcoming: DashboardDto["upcoming"] = upcomingRows.map((row) => ({
     id: row.id,
@@ -179,6 +191,7 @@ export async function getDashboard(input?: { today?: Date }): Promise<DashboardD
     attention: {
       overdueCount,
       dueIn7Count,
+      oldestOverdueDays,
     },
     upcoming,
     breakdown,
