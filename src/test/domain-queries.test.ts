@@ -23,6 +23,7 @@ vi.mock("@/lib/prisma", () => ({
 import { listActivities } from "@/lib/queries/activities";
 import { listFunders } from "@/lib/queries/funders";
 import { getGrant, listGrants } from "@/lib/queries/grants";
+import { getPortfolioExport } from "@/lib/queries/portfolio-export";
 import { listTags } from "@/lib/queries/tags";
 
 describe("organization-scoped domain queries", () => {
@@ -83,6 +84,82 @@ describe("organization-scoped domain queries", () => {
       orderBy: [{ deadline: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       select: expect.objectContaining({ grantTags: expect.objectContaining({ where: { tag: { organizationId: "local-org", deletedAt: null } } }) }),
     }));
+  });
+
+  it("loads the complete scoped portfolio with stable grant/tag ordering and plain export values", async () => {
+    mocks.grantFindMany.mockResolvedValue([{
+      id: "grant-1",
+      title: "Grant",
+      status: "InternalReview",
+      currency: "CAD",
+      amountRequested: { toString: () => "1250.5" },
+      amountAwarded: { toString: () => "0" },
+      deadline: new Date("2026-09-30T00:00:00.000Z"),
+      decisionDate: null,
+      awardTimeframe: "Within 90 days",
+      designation: "Housing",
+      countyServed: "Local County",
+      nextSteps: "Submit budget",
+      notes: "Line one\nLine two",
+      funder: { name: "Local Funder", type: "FAMILY_FUND", website: "https://funder.example", countyServed: "Funder County", notes: "Funder notes" },
+      grantTags: [{ tag: { id: "tag-1", name: "Housing" } }, { tag: { id: "tag-2", name: "Priority" } }],
+    }]);
+
+    await expect(getPortfolioExport()).resolves.toEqual([{
+      grantTitle: "Grant",
+      funderName: "Local Funder",
+      funderType: "Family Fund",
+      funderWebsite: "https://funder.example",
+      funderCountyServed: "Funder County",
+      funderNotes: "Funder notes",
+      status: "Internal Review",
+      amountRequested: "1250.50",
+      amountAwarded: "0.00",
+      currency: "CAD",
+      deadline: "2026-09-30",
+      decisionDate: null,
+      awardTimeframe: "Within 90 days",
+      designation: "Housing",
+      countyServed: "Local County",
+      nextSteps: "Submit budget",
+      notes: "Line one\nLine two",
+      tags: ["Housing", "Priority"],
+    }]);
+    expect(mocks.requireAuthorization).toHaveBeenCalledTimes(1);
+    expect(mocks.grantFindMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "local-org",
+        deletedAt: null,
+        funder: { organizationId: "local-org", deletedAt: null },
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        currency: true,
+        amountRequested: true,
+        amountAwarded: true,
+        deadline: true,
+        decisionDate: true,
+        awardTimeframe: true,
+        designation: true,
+        countyServed: true,
+        nextSteps: true,
+        notes: true,
+        funder: { select: { name: true, type: true, website: true, countyServed: true, notes: true } },
+        grantTags: {
+          where: { tag: { organizationId: "local-org", deletedAt: null } },
+          select: { tag: { select: { id: true, name: true } } },
+          orderBy: [{ tag: { name: "asc" } }, { tag: { id: "asc" } }],
+        },
+      },
+      orderBy: [
+        { deadline: { sort: "asc", nulls: "last" } },
+        { funder: { name: "asc" } },
+        { title: "asc" },
+        { id: "asc" },
+      ],
+    });
   });
 
   it.each([

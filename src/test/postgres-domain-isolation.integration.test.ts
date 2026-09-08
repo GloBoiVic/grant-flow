@@ -37,6 +37,7 @@ let db: PrismaClient | undefined;
 let actions: typeof import("@/app/(authenticated)/(org-required)/grants/actions") | undefined;
 let funderQueries: typeof import("@/lib/queries/funders") | undefined;
 let grantQueries: typeof import("@/lib/queries/grants") | undefined;
+let portfolioExportQueries: typeof import("@/lib/queries/portfolio-export") | undefined;
 let activityQueries: typeof import("@/lib/queries/activities") | undefined;
 let appPrisma: typeof import("@/lib/prisma").prisma | undefined;
 
@@ -86,6 +87,7 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
     organizationId: orgA.id,
     name: "Org A Funder",
     type: "FOUNDATION",
+    website: "https://org-a-funder.example",
     countyServed: "Local Funder County",
     notes: "Local Funder Notes",
   } });
@@ -124,7 +126,7 @@ async function seedDatabase(client: PrismaClient): Promise<void> {
     data: { organizationId: orgA.id, funderId: funderA.id, title: "Soft Deleted Grant", status: "Declined", ownerId: userA.id, createdById: userA.id, deletedAt: new Date("2026-08-02T00:00:00.000Z") },
   });
   const grantAStatus = await client.grant.create({
-    data: { organizationId: orgA.id, funderId: funderA.id, title: "Status Grant", status: "Qualified", ownerId: userA.id, createdById: userA.id },
+    data: { organizationId: orgA.id, funderId: funderA.id, title: "Status Grant", status: "Qualified", amountRequested: "0.00", amountAwarded: "0.00", ownerId: userA.id, createdById: userA.id },
   });
   const grantASoftDeletedFunder = await client.grant.create({
     data: { organizationId: orgA.id, funderId: funderASoftDeleted.id, title: "Soft Funder Grant", status: "Research", ownerId: userA.id, createdById: userA.id },
@@ -266,6 +268,7 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
       actions = await import("@/app/(authenticated)/(org-required)/grants/actions");
       funderQueries = await import("@/lib/queries/funders");
       grantQueries = await import("@/lib/queries/grants");
+      portfolioExportQueries = await import("@/lib/queries/portfolio-export");
       activityQueries = await import("@/lib/queries/activities");
     } catch (setupError) {
       try {
@@ -371,6 +374,47 @@ describePostgres("fresh PostgreSQL domain tenant isolation", () => {
 
     expect(dto?.status).toBe("Internal Review");
     expect(JSON.stringify(dto)).not.toContain("InternalReview");
+  });
+
+  it("exports the local active portfolio across statuses with only active local tags and funders", async () => {
+    setSession("user_aaaa");
+    const rows = await portfolioExportQueries!.getPortfolioExport();
+
+    expect(rows.map((row) => row.grantTitle)).toEqual([
+      "Org A Grant",
+      "Internal Review Grant",
+      "Status Grant",
+    ]);
+    expect(rows[0]).toMatchObject({
+      grantTitle: "Org A Grant",
+      funderName: "Org A Funder",
+      funderType: "Foundation",
+      funderWebsite: "https://org-a-funder.example",
+      funderCountyServed: "Local Funder County",
+      funderNotes: "Local Funder Notes",
+      status: "Research",
+      amountRequested: "1250.50",
+      amountAwarded: "900.00",
+      currency: "CAD",
+      deadline: "2026-09-30",
+      decisionDate: "2026-11-15",
+      awardTimeframe: "Within 90 days",
+      designation: "Housing stability",
+      countyServed: "Local County",
+      nextSteps: "Submit the final budget",
+      notes: "Confirm match funding\nReview attachments",
+      tags: ["Housing"],
+    });
+    expect(rows.find((row) => row.status === "Internal Review")).toBeDefined();
+    expect(rows.find((row) => row.grantTitle === "Status Grant")).toBeDefined();
+    expect(rows.find((row) => row.grantTitle === "Status Grant")).toMatchObject({ amountRequested: "0.00", amountAwarded: "0.00" });
+    expect(rows.some((row) => row.grantTitle === "Soft Deleted Grant")).toBe(false);
+    expect(rows.some((row) => row.grantTitle === "Soft Funder Grant")).toBe(false);
+    expect(rows.some((row) => row.grantTitle === "Mismatched Funder Grant")).toBe(false);
+    expect(rows.some((row) => row.grantTitle === "Org B Grant")).toBe(false);
+    expect(JSON.stringify(rows)).not.toContain(grantAId);
+    expect(JSON.stringify(rows)).not.toContain("cross_org_event");
+    expect(JSON.parse(JSON.stringify(rows))).toEqual(rows);
   });
 
   it("does not expose another organization's activities", async () => {
