@@ -153,3 +153,12 @@ Final review corrections:
 - No schema, migration, dependency, unsupported URL, reminder, calendar, task, or unrelated application changes were made.
 - Feature commit: `1802fec`; merge commit: `5ed44f1`; `main` was pushed to `origin`.
 - GIT END completed; `dispatch/ACTIVE.md` is cleared and the merged local execution branch is safe to remove.
+
+## grant-workspace — Grant Workspace
+
+- Classification: Feature, branch: solo/grant-workspace, base: `88e6a4a`.
+- Implemented the authenticated `/grants/[grantId]` Grant Workspace with complete scoped record presentation, Overview/Notes/Activity sections, Funder details, tags, edit/status controls, Sheet deep-link, responsive accessibility behavior, and exact workspace mutation revalidation.
+- T001/T002 BUILD receipts completed. Root validation found malformed Grant IDs rendering a load error; bounded R001 remediation added normal 404 behavior, then BUILD, validation, and review all passed with no unresolved Critical or Important findings.
+- PostgreSQL-enabled full suite passed 251/251 with 0 skipped; focused tests, lint, TypeScript, Prisma verification, production build, and `git diff --check` passed. Safari Technology Preview automated desktop/mobile, Sheet navigation, and malformed/valid-nonexistent 404 checks passed.
+- Human Safari Technology Preview gate and explicit merge/GIT END approval were provided before finalization.
+- Feature commit: `32c1d69`; fast-forward merged to `main`; final GIT END closure follows in the next commit and `main` is being pushed to `origin`.
