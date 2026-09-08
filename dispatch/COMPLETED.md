@@ -173,3 +173,14 @@ Final review corrections:
 - Deferred non-blocking Minor: `example.com:8080` is rejected rather than normalized.
 - Feature commit: `1c6baf2`; fast-forward merged to `main`; `main` and the feature branch were pushed to `origin`.
 - GIT END completed; `dispatch/ACTIVE.md` is cleared. The local execution branch is safe to remove.
+
+## data-export — Data Export
+
+- Classification: Feature; execution branch `solo/data-export`; base `da091e5`.
+- Implemented the authenticated `/export/portfolio` CSV escape hatch with one self-authorizing organization-scoped portfolio query, complete non-deleted all-status Grant rows, active local Tags, related Funder fields, deterministic ordering, exact decimal/date serialization, formula safety, quoted UTF-8 BOM/CRLF output, and generic failure responses.
+- Added the single semantic `Export portfolio` action to the existing `/grants` header without propagating list filters, pagination, or client download state.
+- T001/T002 BUILD receipts completed; validation and review passed with no unresolved Critical or Important findings.
+- Validation evidence: focused checks **78 passed**, PostgreSQL integration **37 passed**, full Node 26 suite **292 passed / 0 skipped**, lint, TypeScript, Prisma verification, production build, and `git diff --check` passed.
+- Safari Technology Preview browser diagnosis confirmed no export request on `/grants` load and one successful CSV attachment request after activating the link. The user confirmed the authenticated export worked.
+- Feature commit: `9486a81`; merge commit: `d907b7f`; `main` was pushed to `origin`.
+- GIT END completed; `dispatch/ACTIVE.md` is cleared. The local execution branch is safe to remove.
