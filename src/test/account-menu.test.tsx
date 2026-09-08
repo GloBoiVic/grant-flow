@@ -53,12 +53,12 @@ describe("AccountMenu", () => {
     });
   });
 
-  it("displays current Clerk user profile data in the trigger", () => {
+  it("uses an Avatar-only trigger with an accessible name", () => {
     render(<AccountMenu />);
 
-    const trigger = screen.getByRole("button", { name: /Open account menu/ });
-    expect(trigger).toHaveTextContent("Jane Q. Doe");
-    expect(trigger).toHaveTextContent("jane@example.com");
+    const trigger = screen.getByRole("button", { name: "Open account menu" });
+    expect(trigger).not.toHaveTextContent("Jane Q. Doe");
+    expect(trigger).not.toHaveTextContent("jane@example.com");
     expect(trigger).toHaveTextContent("JD");
   });
 
@@ -67,7 +67,7 @@ describe("AccountMenu", () => {
 
     render(<AccountMenu />);
 
-    expect(screen.getByRole("button", { name: /Open account menu/ })).toHaveTextContent("GrantFlow user");
+    expect(screen.getByRole("button", { name: "Open account menu" })).not.toHaveTextContent("GrantFlow user");
   });
 
   it("opens the account menu without organization controls", async () => {
@@ -77,6 +77,8 @@ describe("AccountMenu", () => {
     await user.click(screen.getByRole("button", { name: /Open account menu/ }));
 
     expect(await screen.findByText("Profile")).toBeInTheDocument();
+    expect(screen.getByText("Jane Q. Doe")).toBeInTheDocument();
+    expect(screen.getByText("jane@example.com")).toBeInTheDocument();
     expect(screen.queryByText(/organization settings|members|manage organization/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /switch organization/i })).not.toBeInTheDocument();
     expect(screen.getByText("Sign out")).toBeInTheDocument();

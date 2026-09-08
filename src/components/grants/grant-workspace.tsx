@@ -45,7 +45,13 @@ function formatDate(value: string): string {
 }
 
 function formatAmount(value: string, currency: string): string {
-  return `${currency} ${new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value))}`;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    currencyDisplay: "code",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(value));
 }
 
 function DetailField({ label, value, fullWidth = false }: { label: string; value: React.ReactNode; fullWidth?: boolean }): React.ReactNode {
@@ -58,9 +64,11 @@ function DetailField({ label, value, fullWidth = false }: { label: string; value
 }
 
 export function GrantWorkspace({ grant, funders, tags }: GrantWorkspaceProps): React.ReactNode {
+  const hasAmount = grant.amountRequested !== null || grant.amountAwarded !== null;
+
   return (
     <div className="mx-auto w-full max-w-6xl overflow-x-hidden px-4 py-6 sm:px-6 lg:px-8">
-      <header className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+      <header>
         <Link
           href="/grants"
           className="inline-flex rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
@@ -71,7 +79,7 @@ export function GrantWorkspace({ grant, funders, tags }: GrantWorkspaceProps): R
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-start gap-3">
               <h1 className="min-w-0 flex-1 break-words text-title tracking-tight text-balance">{grant.title}</h1>
-              <Badge className={`shrink-0 ${statusClass[grant.status] ?? ""}`}>{grant.status}</Badge>
+              <Badge className={`shrink-0 font-sans ${statusClass[grant.status] ?? ""}`}>{grant.status}</Badge>
             </div>
             <p className="mt-3 min-w-0 break-words text-sm text-muted-foreground">
               <span className="font-medium text-foreground">Funder:</span> {grant.funder.name}
@@ -86,23 +94,19 @@ export function GrantWorkspace({ grant, funders, tags }: GrantWorkspaceProps): R
               >
                 {grant.funder.website}
               </a>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">Funder website: —</p>
-            )}
+            ) : null}
           </div>
           <GrantWorkspaceActions key={grant.updatedAt} grant={grant} funders={funders} />
         </div>
       </header>
 
-      <div className="mt-6 space-y-6">
-        <section aria-labelledby="grant-overview-title" className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
+        <section aria-labelledby="grant-overview-title" className="p-5 sm:p-6">
           <h2 id="grant-overview-title" className="text-h2 tracking-tight text-balance">Overview</h2>
           <dl className="mt-5 grid min-w-0 grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-            <DetailField label="Funder" value={grant.funder.name} />
-            <DetailField label="Status" value={<Badge className={statusClass[grant.status] ?? ""}>{grant.status}</Badge>} />
-            <DetailField label="Amount requested" value={grant.amountRequested ? formatAmount(grant.amountRequested, grant.currency) : "—"} />
-            <DetailField label="Amount awarded" value={grant.amountAwarded ? formatAmount(grant.amountAwarded, grant.currency) : "—"} />
-            <DetailField label="Currency" value={grant.currency} />
+            <DetailField label="Amount requested" value={grant.amountRequested !== null ? <span className="font-mono font-normal text-muted-foreground tabular-nums">{formatAmount(grant.amountRequested, grant.currency)}</span> : "—"} />
+            <DetailField label="Amount awarded" value={grant.amountAwarded !== null ? <span className="font-mono font-normal text-muted-foreground tabular-nums">{formatAmount(grant.amountAwarded, grant.currency)}</span> : "—"} />
+            {!hasAmount && <DetailField label="Currency" value={grant.currency} />}
             <DetailField label="Application deadline" value={grant.deadline ? formatDate(grant.deadline) : "—"} />
             <DetailField label="Decision date" value={grant.decisionDate ? formatDate(grant.decisionDate) : "—"} />
             <DetailField label="Award timeframe" value={grant.awardTimeframe || "—"} />
@@ -117,19 +121,19 @@ export function GrantWorkspace({ grant, funders, tags }: GrantWorkspaceProps): R
           <TagManager grantId={grant.id} assignedTags={grant.tags} activeTags={tags} />
         </section>
 
-        <section aria-labelledby="grant-notes-title" className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <section aria-labelledby="grant-notes-title" className="p-5 sm:p-6">
           <h2 id="grant-notes-title" className="text-h2 tracking-tight text-balance">Notes</h2>
           {grant.notes ? (
             <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{grant.notes}</p>
           ) : (
-            <p className="mt-4 text-sm text-muted-foreground">No notes recorded yet.</p>
+            <p className="mt-4 text-sm text-muted-foreground">No notes yet.</p>
           )}
         </section>
 
-        <section aria-labelledby="grant-activity-title" className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <section aria-labelledby="grant-activity-title" className="border-t border-border p-5 sm:p-6">
           <h2 id="grant-activity-title" className="text-h2 tracking-tight text-balance">Activity</h2>
           {grant.activities.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">No activity recorded.</p>
+            <p className="mt-4 text-sm text-muted-foreground">No activity yet.</p>
           ) : (
             <ol aria-label="Grant activity" className="mt-5 space-y-5 border-l border-border pl-5">
               {grant.activities.map((activity) => (

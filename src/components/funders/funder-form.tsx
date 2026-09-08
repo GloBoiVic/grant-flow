@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { createFunder, editFunder } from "@/app/(authenticated)/(org-required)/grants/actions";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { FunderType } from "@/lib/validations/funder";
 import type { FunderDto } from "@/types/funder";
 
@@ -76,7 +77,7 @@ export function FunderForm({ open, onClose, funder, onSaved, onDirtyChange }: Fu
   }
 
   function closeForm(): void {
-    if (isEditing && isDirty && !window.confirm("Discard unsaved funder changes?")) return;
+    if (isDirty && !window.confirm("Discard unsaved funder changes?")) return;
     setIsDirty(false);
     onDirtyChange?.(false);
     onClose();
@@ -160,7 +161,7 @@ export function FunderForm({ open, onClose, funder, onSaved, onDirtyChange }: Fu
     </div>
   );
   const actions = (
-    <div className={`flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end ${isEditing ? "px-4 pb-4" : ""}`}>
+    <div className="flex flex-col-reverse gap-2 border-t border-border bg-background px-4 pt-4 pb-4 sm:flex-row sm:justify-end">
       <Button type="button" variant="outline" onClick={closeForm} disabled={isSubmitting}>Cancel</Button>
       <Button type="submit" disabled={isSubmitting}>{isSubmitting ? (isEditing ? "Saving…" : "Adding…") : isEditing ? "Save changes" : <><Plus aria-hidden="true" /> Add funder</>}</Button>
     </div>
@@ -171,21 +172,20 @@ export function FunderForm({ open, onClose, funder, onSaved, onDirtyChange }: Fu
   }
 
   return (
-    <section id="add-funder-form" className="mt-6 rounded-lg border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby="add-funder-title">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 id="add-funder-title" className="text-h2 text-foreground">Add funder</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Create the funder record you will connect to grants.</p>
-        </div>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Close add funder form" onClick={closeForm}>
-          <X aria-hidden="true" />
-        </Button>
-      </div>
-      <form className="mt-5 space-y-4" onSubmit={handleSubmit} noValidate>
-        {feedback}
-        {fields}
-        {actions}
-      </form>
-    </section>
+    <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) closeForm(); }}>
+      <SheetContent className="overflow-hidden" onEscapeKeyDown={(event) => { if (isDirty && !window.confirm("Discard unsaved funder changes?")) event.preventDefault(); }}>
+        <SheetHeader>
+          <SheetTitle className="pr-8 text-h2">Add funder</SheetTitle>
+          <SheetDescription className="sr-only">Create the funder record you will connect to grants.</SheetDescription>
+        </SheetHeader>
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-4">
+            {feedback}
+            {fields}
+          </div>
+          {actions}
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

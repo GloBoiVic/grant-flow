@@ -22,7 +22,7 @@ export function TopNavigation({ identity, sidebarCollapsed, children }: TopNavig
     )}>
       <div className="flex min-w-0 items-center gap-2">
         <MobileNavigation organizationName={identity.organizationName} />
-        {children ?? (pathname === "/grants" ? <GrantsSearch /> : <span className="truncate text-sm font-medium">{identity.organizationName}</span>)}
+        {children ?? (pathname === "/grants" ? <GrantsSearch /> : <span className="truncate text-sm font-medium lg:hidden">{identity.organizationName}</span>)}
       </div>
       <AccountMenu />
     </header>

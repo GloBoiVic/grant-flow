@@ -46,16 +46,11 @@ export function AccountMenu(): React.ReactNode {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="max-w-full justify-start px-2">
+        <Button variant="ghost" size="icon-sm" aria-label="Open account menu">
           <Avatar size="sm" aria-hidden="true">
             {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt="" />}
             <AvatarFallback>{initials(userName)}</AvatarFallback>
           </Avatar>
-          <span className="min-w-0 text-left">
-             <span className="block truncate text-sm">{userName}</span>
-             <span className="block truncate text-caption text-muted-foreground">{userEmail}</span>
-          </span>
-          <span className="sr-only">Open account menu</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">

@@ -36,9 +36,19 @@ describe("funder prerequisite UI", () => {
     render(<FunderPage funders={[]} />);
 
     expect(screen.getByRole("heading", { name: "No funders yet" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Add funder" }));
+    expect(screen.getByText("Add your first funder to get started.")).toBeInTheDocument();
+    const trigger = screen.getByRole("button", { name: "Add funder" });
+    expect(trigger).not.toHaveAttribute("aria-controls");
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Add funder" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Add funder" })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Name/)).toHaveAttribute("autocomplete", "organization");
+    expect(document.getElementById("add-funder-form")).not.toBeInTheDocument();
+    expect(document.querySelector("section#add-funder-form")).not.toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Add funder" });
+    expect(dialog).toHaveClass("overflow-hidden");
+    expect(dialog.querySelector(".overflow-y-auto")).toBeInTheDocument();
+    expect(dialog.querySelector(".overflow-y-auto")).toHaveClass("overscroll-contain", "px-4");
+    expect(within(dialog).getByLabelText(/Name/)).toHaveAttribute("autocomplete", "organization");
     expect(screen.getByLabelText(/Website/)).toHaveAttribute("type", "url");
     expect(screen.getByLabelText(/Website/)).toHaveAttribute("placeholder", "example.org or https://example.org");
     expect(screen.getByLabelText(/County served/)).toBeInTheDocument();
@@ -50,13 +60,14 @@ describe("funder prerequisite UI", () => {
     const user = userEvent.setup();
     render(<FunderPage funders={[]} />);
     await user.click(screen.getByRole("button", { name: "Add funder" }));
-    const name = screen.getByLabelText(/Name/);
+    const dialog = screen.getByRole("dialog", { name: "Add funder" });
+    const name = within(dialog).getByLabelText(/Name/);
     await user.type(name, "Entered funder");
-    await user.click(screen.getAllByRole("button", { name: /^Add funder$/ })[1]);
+    await user.click(within(dialog).getByRole("button", { name: /^Add funder$/ }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid funder details.");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Invalid funder details.");
     expect(name).toHaveValue("Entered funder");
-    expect(screen.getByText("Name is required")).toBeInTheDocument();
+    expect(within(dialog).getByText("Name is required")).toBeInTheDocument();
   });
 
   it("refreshes the organization-scoped list after a successful creation", async () => {
@@ -64,8 +75,9 @@ describe("funder prerequisite UI", () => {
     const user = userEvent.setup();
     render(<FunderPage funders={[funder]} />);
     await user.click(screen.getByRole("button", { name: "Add funder" }));
-    await user.type(screen.getByLabelText(/Name/), "North Star Foundation");
-    await user.click(screen.getAllByRole("button", { name: /^Add funder$/ })[1]);
+    const dialog = screen.getByRole("dialog", { name: "Add funder" });
+    await user.type(within(dialog).getByLabelText(/Name/), "North Star Foundation");
+    await user.click(within(dialog).getByRole("button", { name: /^Add funder$/ }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalledOnce());
     expect(screen.getByRole("status")).toHaveTextContent("Funder added successfully.");
@@ -76,7 +88,10 @@ describe("funder prerequisite UI", () => {
     const user = userEvent.setup();
     render(<FunderPage funders={[funder]} />);
 
+    expect(screen.queryByText("Organizations that support your grant portfolio.")).not.toBeInTheDocument();
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Name", "Type", "Website"]);
+    expect(screen.queryByText(/Showing \d+ funders?/)).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Funder list" })).not.toHaveClass("shadow-sm");
     const row = screen.getByRole("row", { name: /North Star Foundation/ });
     expect(within(row).getByRole("link", { name: "https://northstar.example" })).toHaveAttribute("target", "_blank");
     const nameButton = screen.getByRole("button", { name: "Open details for North Star Foundation" });
@@ -86,6 +101,9 @@ describe("funder prerequisite UI", () => {
     expect(screen.getByRole("dialog", { name: "North Star Foundation" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "North Star Foundation" })).toBeInTheDocument();
     expect(within(screen.getByRole("dialog")).getByText("Foundation")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).queryByText("Name", { exact: true })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).queryByText("Funder record details and maintenance fields.")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).queryByText("Update the funder record without leaving your portfolio.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "https://northstar.example" })).toHaveAttribute("target", "_blank");
     expect(screen.getByText("North County")).toBeInTheDocument();
     expect(screen.getByText("Annual review in the fall.")).toHaveClass("whitespace-pre-wrap");
@@ -106,7 +124,7 @@ describe("funder prerequisite UI", () => {
     await user.click(nameButton);
 
     const dialog = screen.getByRole("dialog");
-    expect(screen.getByText("No notes recorded.")).toBeInTheDocument();
+    expect(screen.getByText("No notes yet")).toBeInTheDocument();
     expect(within(dialog).getAllByText("—")).toHaveLength(2);
     expect(screen.queryByText("FOUNDATION")).not.toBeInTheDocument();
   });

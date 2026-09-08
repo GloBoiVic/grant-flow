@@ -28,15 +28,22 @@ describe("DeadlineView", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Deadlines" })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
     expect(screen.getByText("As of September 4, 2026")).toBeInTheDocument();
+    expect(screen.queryByText("Review pre-submission application deadlines and the work that needs attention.")).not.toBeInTheDocument();
 
     const overdueSection = screen.getByRole("region", { name: "Overdue" });
     const dueSoonSection = screen.getByRole("region", { name: "Due in the next 7 days" });
     const laterSection = screen.getByRole("region", { name: "Later in the next 30 days" });
+    expect(overdueSection.parentElement).toHaveClass("border");
+    expect(overdueSection.parentElement).not.toHaveClass("shadow-sm");
+    expect(overdueSection.parentElement?.parentElement).toHaveClass("max-w-7xl");
+    expect(screen.getByRole("heading", { name: "Overdue" }).parentElement).toHaveClass("py-5");
+    expect(within(overdueSection).getByRole("listitem")).toHaveClass("py-4");
     expect(within(overdueSection).getByRole("list")).toBeInTheDocument();
     expect(within(dueSoonSection).getByRole("list")).toBeInTheDocument();
     expect(within(laterSection).getByRole("list")).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: "Overdue Grant" })).toHaveAttribute("href", "/grants?grant=grant%2Foverdue");
+    expect(screen.getByRole("link", { name: "Overdue Grant" })).toHaveClass("focus-visible:outline-2");
     expect(screen.getByRole("link", { name: "Due Soon Grant" })).toHaveAttribute("href", "/grants?grant=grant%20due%20soon");
     expect(screen.getByText("North Star Foundation")).toBeInTheDocument();
     expect(screen.getByText("Sep 3, 2026")).toHaveAttribute("dateTime", "2026-09-03");
@@ -47,8 +54,8 @@ describe("DeadlineView", () => {
     render(<DeadlineView dto={{ asOf: "2026-09-04", trackedGrantCount: 0, groups: { overdue: [], dueSoon: [], later: [] } }} />);
 
     expect(screen.getByText("No grants tracked yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "/import" })).toHaveAttribute("href", "/import");
-    expect(screen.getByRole("link", { name: "/grants" })).toHaveAttribute("href", "/grants");
+    expect(screen.getByRole("link", { name: "Import a spreadsheet" })).toHaveAttribute("href", "/import");
+    expect(screen.getByRole("link", { name: "add a grant" })).toHaveAttribute("href", "/grants");
     expect(screen.getByText("No overdue deadlines.")).toBeInTheDocument();
     expect(screen.getByText("No deadlines due in the next 7 days.")).toBeInTheDocument();
     expect(screen.getByText("No other pre-submission deadlines in the next 30 days.")).toBeInTheDocument();
@@ -58,8 +65,8 @@ describe("DeadlineView", () => {
   it("distinguishes a portfolio with no eligible deadline rows", () => {
     render(<DeadlineView dto={{ asOf: "2026-09-04", trackedGrantCount: 4, groups: { overdue: [], dueSoon: [], later: [] } }} />);
 
-    expect(screen.getByText("No eligible pre-submission application deadlines are currently in this view.")).toBeInTheDocument();
-    expect(screen.getByText("Only Research, Qualified, Planning, Writing, and Internal Review grants are included in application-deadline attention.")).toBeInTheDocument();
+    expect(screen.getByText("No eligible deadlines are currently in view.")).toBeInTheDocument();
+    expect(screen.getByText("Deadlines here include only Research, Qualified, Planning, Writing, and Internal Review grants.")).toBeInTheDocument();
     expect(screen.queryByText(/no deadlines are recorded/i)).not.toBeInTheDocument();
   });
 
