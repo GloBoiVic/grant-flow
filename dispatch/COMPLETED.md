@@ -141,3 +141,15 @@ Final review corrections:
 - Review: R001/R002/R003 each PASS, zero unresolved Critical/Important.
 - Closing note: Dashboard still honors "Preserve exactly" list (totals, pipeline, pre-submission, overdue/next7/next30/nearest5/status, /grants links, UTC helpers, schema). Visual identity is calm, professional, information-dense via tokens only.
 - Commit: 4fb0271 on main — 7 files +543/-120.
+
+## deadline-view — Deadline View
+
+- Classification: Feature, branch: solo/deadline-view, base: dd9ca12.
+- Implemented the authenticated `/deadlines` work view with organization-scoped eligible pre-submission deadline query, exact UTC date-only overdue/due-soon/later windows, stable ordering, semantic responsive lists, existing Grant Sheet deep-links, status styling, safe-noon As of presentation, and honest empty states.
+- Added the approved Dashboard follow-up: `Oldest overdue: 1 day` / `N days` derived from the earliest eligible overdue deadline, with no new color level or duplicated row detail.
+- T001/T002/T003 BUILD, validation, and review receipts completed. Validation and review passed with zero Critical or Important findings.
+- Validation: Node 26 tests passed (206 passed / 32 skipped), focused deadline/Dashboard tests passed (55), lint, TypeScript, Prisma, build, and `git diff --check` passed. PostgreSQL integration was skipped because `GRANTFLOW_TEST_DATABASE_ADMIN_URL` was unavailable.
+- Authenticated Safari Technology Preview validation passed for Dashboard desktop/mobile, Deadline View responsive behavior, focus visibility, and `/grants?grant=<id>` Grant Sheet activation.
+- No schema, migration, dependency, unsupported URL, reminder, calendar, task, or unrelated application changes were made.
+- Feature commit: `1802fec`; merge commit: `5ed44f1`; `main` was pushed to `origin`.
+- GIT END completed; `dispatch/ACTIVE.md` is cleared and the merged local execution branch is safe to remove.
